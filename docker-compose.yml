@@ -1,37 +1,100 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    restart: always
+    image: postgres:15
+    container_name: bloom-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: bloom_contracts
-      POSTGRES_USER: bloom_admin
-      POSTGRES_PASSWORD: bloom_dev_2025
+      POSTGRES_USER: rapha
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bloom_admin -d bloom_contracts"]
+      test: ["CMD-SHELL", "pg_isready -U rapha -d bloom_contracts"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - bloom-network
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
-    restart: always
+    container_name: bloom-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispassword}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", "${REDIS_PASSWORD:-redispassword}", "ping"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 5
+    networks:
+      - bloom-network
+
+  # Application Server
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.production
+    container_name: bloom-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4003
+      DATABASE_URL: postgresql://rapha:${POSTGRES_PASSWORD:-postgres}@postgres:5432/bloom_contracts
+      REDIS_URL: redis://default:${REDIS_PASSWORD:-redispassword}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-bloom-energy-production-jwt-secret-change-in-production}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4002,http://localhost:3000,http://localhost:5173,http://localhost:4000,http://localhost:4001}
+      UPLOAD_DIR: /app/uploads
+      LOG_LEVEL: info
+      DEFAULT_AI_PROVIDER: anthropic
+      ANTHROPIC_MODEL: claude-3-5-sonnet-20241022
+      COST_TRACKING_ENABLED: true
+      ENABLE_API_DOCS: false
+      ENABLE_SWAGGER: false
+      AWS_REGION: us-west-2
+      RATE_LIMIT_WINDOW: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+    ports:
+      - "4003:4003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+      - logs_data:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "server/scripts/health-check.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - bloom-network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+  logs_data:
+    driver: local
+
+networks:
+  bloom-network:
+    driver: bridge
