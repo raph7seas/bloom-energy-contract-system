@@ -1,0 +1,39 @@
+BLOOM ENERGY POWER PURCHASE AGREEMENT
+
+This Power Purchase Agreement ("Agreement") is entered into on January 1, 2024, by and between:
+
+CUSTOMER: Acme Manufacturing Corp.
+PROVIDER: Bloom Energy Corporation
+
+WHEREAS, Customer requires reliable electrical power for its manufacturing operations;
+WHEREAS, Provider has the capability to install and maintain fuel cell power generation systems;
+
+NOW, THEREFORE, the parties agree as follows:
+
+1. SYSTEM SPECIFICATIONS
+   - Capacity: 2000 kW
+   - Technology: Solid Oxide Fuel Cell
+   - Installation: Customer premises
+   - Term: 20 years
+
+2. FINANCIAL TERMS
+   - Base Rate: $0.15/kWh
+   - Annual Escalation: 2.5%
+   - Microgrid Adder: $0.02/kWh
+   - Payment Terms: Net 30 days
+
+3. OPERATING CONDITIONS
+   - Minimum Demand: 500 kW
+   - Maximum Demand: 2000 kW
+   - Efficiency Warranty: 60%
+   - Output Warranty: 95%
+
+4. TECHNICAL SPECIFICATIONS
+   - Voltage: 480V
+   - Components: RI, AC, UC systems
+   - Grid Connection: Utility interconnection
+   - Monitoring: Real-time remote monitoring
+
+This Agreement shall be governed by the laws of California and any disputes shall be subject to binding arbitration.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement on the date first written above.

@@ -1,0 +1,589 @@
+// Bloom Energy Contract Learning & Rules Management System
+// Prisma schema for PostgreSQL database
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Core Contract model
+model Contract {
+  id            String            @id @default(uuid())
+  name          String
+  client        String
+  site          String
+  capacity      Float
+  term          Int               // Contract term in years
+  systemType    SystemType
+  uploadDate    DateTime          @default(now())
+  effectiveDate DateTime
+  status        ContractStatus    @default(DRAFT)
+  totalValue    Float?
+  yearlyRate    Float?
+  notes         String?
+  tags          String[]
+  
+  // Relationships
+  financial     FinancialParams?
+  technical     TechnicalParams?
+  operating     OperatingParams?
+  templates     ContractTemplate[] @relation("TemplateContracts")
+  uploads       UploadedFile[]
+  documents     ContractDocument[]
+  
+  // Metadata
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdBy     String?
+  updatedBy     String?
+  version       Int               @default(1)
+  
+  @@map("contracts")
+}
+
+// Financial Parameters
+model FinancialParams {
+  id                    String    @id @default(uuid())
+  contractId            String    @unique
+  contract              Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  baseRate              Float
+  microgridAdder        Float?
+  escalation            Float     // Annual escalation percentage
+  thermalCycleFee       Float?
+  electricalBudget      Float?
+  commissioningAllowance Float?
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@map("financial_parameters")
+}
+
+// Technical Parameters
+model TechnicalParams {
+  id                    String          @id @default(uuid())
+  contractId            String          @unique
+  contract              Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  voltage               VoltageLevel
+  gridVoltage           VoltageLevel?
+  servers               Int
+  components            ComponentType[]
+  recType               String?
+  
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  
+  @@map("technical_parameters")
+}
+
+// Operating Parameters
+model OperatingParams {
+  id                    String    @id @default(uuid())
+  contractId            String    @unique
+  contract              Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  outputWarranty        Float     // Percentage
+  efficiency            Float     // Percentage
+  minDemand             Float     // kW
+  maxDemand             Float     // kW
+  criticalOutput        Float     // kW
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@map("operating_parameters")
+}
+
+// Contract Templates
+model ContractTemplate {
+  id            String    @id @default(uuid())
+  name          String
+  description   String
+  category      String
+  isActive      Boolean   @default(true)
+  
+  // Template data stored as JSON
+  formData      Json
+  
+  // Usage tracking
+  usageCount    Int       @default(0)
+  lastUsed      DateTime?
+  
+  // Relationships
+  contracts     Contract[] @relation("TemplateContracts")
+  
+  // Metadata
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String?
+  
+  @@map("contract_templates")
+}
+
+// File Upload tracking (legacy - maintained for compatibility)
+model UploadedFile {
+  id            String      @id @default(uuid())
+  contractId    String?
+  contract      Contract?   @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  
+  fileName      String
+  originalName  String
+  fileSize      Int         // bytes
+  fileType      String      // MIME type
+  uploadDate    DateTime    @default(now())
+  status        UploadStatus @default(UPLOADING)
+  progress      Int         @default(0)
+  
+  // Extracted data (JSON)
+  extractedData Json?
+  
+  // File storage path
+  filePath      String?
+  
+  // Metadata
+  uploadedBy    String?
+  
+  @@map("uploaded_files")
+}
+
+// Enhanced multi-document support
+model ContractDocument {
+  id                String              @id @default(uuid())
+  contractId        String
+  contract          Contract            @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  // Document classification
+  documentType      DocumentType        @default(PRIMARY)
+  sequenceOrder     Int                 @default(0)
+  parentDocumentId  String?
+  parentDocument    ContractDocument?   @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  childDocuments    ContractDocument[]  @relation("DocumentHierarchy")
+  
+  // File information
+  title             String
+  fileName          String
+  originalName      String
+  fileSize          Int                 // bytes
+  fileType          String              // MIME type
+  filePath          String?
+  
+  // Processing status
+  uploadStatus      ProcessingStatus    @default(UPLOADING)
+  processingStatus  ProcessingStatus    @default(PENDING)
+  uploadProgress    Int                 @default(0)
+  processingProgress Int               @default(0)
+  
+  // Document metrics
+  pageCount         Int?
+  wordCount         Int?
+  totalChunks       Int?                // For chunked uploads
+  chunksUploaded    Int                 @default(0)
+  
+  // Processing metadata
+  extractionStarted DateTime?
+  extractionCompleted DateTime?
+  errorMessage      String?
+  processingMetadata Json?
+  
+  // Relationships
+  pages             DocumentPage[]
+  chunks            DocumentChunk[]
+  
+  // Audit
+  uploadDate        DateTime            @default(now())
+  uploadedBy        String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("contract_documents")
+}
+
+// Page-level content for large documents
+model DocumentPage {
+  id                String              @id @default(uuid())
+  documentId        String
+  document          ContractDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  pageNumber        Int
+  extractedText     String?             @db.Text
+  confidenceScore   Float?
+  wordCount         Int?
+  characterCount    Int?
+  
+  // OCR and processing metadata
+  ocrProvider       String?             // 'textract', 'tesseract', etc.
+  processingTime    Int?                // milliseconds
+  extractionMethod  String?             // 'native_pdf', 'ocr', 'mammoth'
+  
+  // Page dimensions and layout
+  width             Float?
+  height            Float?
+  rotation          Int?                @default(0)
+  
+  // Content analysis
+  hasTable          Boolean             @default(false)
+  hasImage          Boolean             @default(false)
+  hasSignature      Boolean             @default(false)
+  language          String?             @default("en")
+  
+  // Processing metadata
+  metadata          Json?
+  processingStatus  ProcessingStatus    @default(PENDING)
+  errorMessage      String?
+  
+  // Timestamps
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  processedAt       DateTime?
+  
+  @@unique([documentId, pageNumber])
+  @@map("document_pages")
+}
+
+// Chunked upload tracking
+model DocumentChunk {
+  id              String              @id @default(uuid())
+  documentId      String
+  document        ContractDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  chunkNumber     Int
+  chunkSize       Int                 // bytes
+  chunkHash       String              // For integrity verification
+  uploadStatus    ProcessingStatus    @default(PENDING)
+  
+  // File storage
+  tempFilePath    String?             // Temporary storage during upload
+  
+  // Upload tracking
+  uploadedAt      DateTime?
+  retryCount      Int                 @default(0)
+  errorMessage    String?
+  
+  @@unique([documentId, chunkNumber])
+  @@map("document_chunks")
+}
+
+// Document processing jobs queue
+model ProcessingJob {
+  id              String              @id @default(uuid())
+  jobType         ProcessingJobType
+  status          ProcessingStatus    @default(PENDING)
+  priority        Int                 @default(5)
+  
+  // Target entity
+  entityType      String              // 'contract_document', 'document_page'
+  entityId        String              // ID of the entity to process
+  
+  // Job configuration
+  jobConfig       Json?               // Job-specific configuration
+  
+  // Progress tracking
+  progress        Int                 @default(0)
+  totalSteps      Int?
+  currentStep     String?
+  
+  // Timing
+  scheduledAt     DateTime            @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  estimatedDuration Int?              // seconds
+  
+  // Error handling
+  retryCount      Int                 @default(0)
+  maxRetries      Int                 @default(3)
+  errorMessage    String?
+  errorDetails    Json?
+  
+  // Results
+  result          Json?
+  
+  // Metadata
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  createdBy       String?
+  
+  @@map("processing_jobs")
+}
+
+// AI Assistant Messages (for chat history)
+model AIMessage {
+  id            String    @id @default(uuid())
+  sessionId     String    // Group messages by session
+  role          AIRole
+  content       String
+  timestamp     DateTime  @default(now())
+  
+  // Optional metadata
+  metadata      Json?     // For storing additional context
+  
+  @@map("ai_messages")
+}
+
+// Learned Rules for the learning system
+model LearnedRule {
+  id            String        @id @default(uuid())
+  ruleType      RuleType
+  category      String        // e.g., "financial", "technical", "operating"
+  name          String        // e.g., "capacity_range", "escalation_range"
+  
+  // Rule data stored as JSON
+  ruleData      Json
+  
+  // Confidence and usage metrics
+  confidence    Float         @default(0.0)
+  occurrences   Int           @default(1)
+  lastSeen      DateTime      @default(now())
+  
+  // Rule metadata
+  isActive      Boolean       @default(true)
+  source        String?       // Where the rule was learned from
+  
+  // Timestamps
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  @@unique([ruleType, category, name])
+  @@map("learned_rules")
+}
+
+// Audit logging
+model AuditLog {
+  id            String    @id @default(uuid())
+  
+  // Entity being audited
+  entityType    String    // CONTRACT, LEARNED_RULE, USER, etc.
+  entityId      String    // ID of the entity
+  
+  // Action performed
+  action        String    // CREATE, UPDATE, DELETE, VIEW, etc.
+  
+  // Store old and new values as JSON strings
+  oldValues     String?   // JSON string
+  newValues     String?   // JSON string
+  
+  // User context
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Request context
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json      @default("{}")
+  
+  // Integrity verification
+  auditHash     String    // SHA256 hash for integrity
+  
+  // Timestamp
+  timestamp     DateTime  @default(now())
+  
+  @@map("audit_logs")
+}
+
+// Entity versioning for change history
+model EntityVersion {
+  id                String    @id @default(uuid())
+  
+  // Entity being versioned
+  entityType        String    // CONTRACT, LEARNED_RULE, etc.
+  entityId          String    // ID of the entity
+  versionNumber     Int       // Sequential version number
+  
+  // Version data
+  data              String    // JSON string of entity state
+  changeDescription String?   // Optional description of changes
+  versionHash       String    // SHA256 hash for integrity
+  
+  // Metadata
+  createdAt         DateTime  @default(now())
+  createdBy         String?
+  createdByUser     User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  @@unique([entityType, entityId, versionNumber])
+  @@map("entity_versions")
+}
+
+// System statistics (for dashboard)
+model SystemStats {
+  id                    String    @id @default(uuid())
+  
+  totalContracts        Int       @default(0)
+  totalValue            Float     @default(0)
+  averageContractValue  Float     @default(0)
+  monthlyGrowth         Float     @default(0)
+  completionRate        Float     @default(0)
+  
+  // JSON fields for complex stats
+  contractsByStatus     Json      @default("{}")
+  contractsByType       Json      @default("{}")
+  
+  // Date this snapshot was taken
+  snapshotDate          DateTime  @default(now())
+  
+  @@map("system_stats")
+}
+
+// User Authentication Models
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String    // Hashed password
+  firstName     String
+  lastName      String
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  
+  // Relationships
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  createdVersions   EntityVersion[]
+  
+  // Audit fields  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("users")
+}
+
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String    @unique
+  refreshToken  String?   @unique
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
+  ipAddress     String?
+  userAgent     String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("sessions")
+}
+
+// Enums
+enum SystemType {
+  POWER_PURCHASE_STANDARD
+  POWER_PURCHASE_WITH_BATTERY
+  MICROGRID_CONSTRAINED
+  MICROGRID_UNCONSTRAINED
+  PP    // Legacy
+  MG    // Legacy
+  AMG   // Legacy
+  OG    // Legacy
+  
+  @@map("system_type")
+}
+
+enum ContractStatus {
+  ACTIVE
+  DRAFT
+  EXPIRED
+  CANCELLED
+  PENDING
+  
+  @@map("contract_status")
+}
+
+enum VoltageLevel {
+  V_208
+  V_480
+  V_4_16K
+  V_13_2K
+  V_34_5K
+  
+  @@map("voltage_level")
+}
+
+enum ComponentType {
+  RI      // Renewable Integration
+  AC      // Advanced Controls
+  UC      // Utility Connections
+  BESS    // Battery Energy Storage System
+  SOLAR   // Solar Integration
+  WIND    // Wind Integration
+  
+  @@map("component_type")
+}
+
+enum UploadStatus {
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  ERROR
+  
+  @@map("upload_status")
+}
+
+enum AIRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  
+  @@map("ai_role")
+}
+
+enum RuleType {
+  RANGE       // Min/max values
+  ENUM        // List of valid options
+  CORRELATION // Relationships between fields
+  VALIDATION  // Validation rules
+  CALCULATION // Calculation formulas
+  
+  @@map("rule_type")
+}
+
+enum UserRole {
+  ADMIN       // Full system access
+  MANAGER     // Can manage contracts and users
+  USER        // Can create and edit contracts
+  VIEWER      // Read-only access
+  
+  @@map("user_role")
+}
+
+enum DocumentType {
+  PRIMARY         // Main contract document
+  APPENDIX        // Appendix or attachment
+  AMENDMENT       // Contract amendment
+  EXHIBIT         // Exhibit or schedule
+  ADDENDUM        // Addendum or supplement
+  SIGNATURE       // Signature page
+  COVER_LETTER    // Cover letter
+  OTHER           // Other document type
+  
+  @@map("document_type")
+}
+
+enum ProcessingStatus {
+  PENDING         // Not started
+  UPLOADING       // Currently uploading
+  PROCESSING      // Being processed
+  COMPLETED       // Successfully completed
+  FAILED          // Failed with error
+  CANCELLED       // Cancelled by user
+  RETRYING        // Retrying after failure
+  
+  @@map("processing_status")
+}
+
+enum ProcessingJobType {
+  CHUNK_UPLOAD        // Process uploaded chunks
+  TEXT_EXTRACTION     // Extract text from document
+  PAGE_ANALYSIS       // Analyze document pages
+  DOCUMENT_MERGE      // Merge document chunks
+  OCR_PROCESSING      // OCR text extraction
+  CONTENT_INDEXING    // Index content for search
+  RULE_EXTRACTION     // Extract business rules
+  DOCUMENT_VALIDATION // Validate document content
+  
+  @@map("processing_job_type")
+}
