@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { DashboardStats } from './dashboard/DashboardStats';
-import { QuickActions } from './dashboard/QuickActions';
-import { DashboardCharts } from './dashboard/DashboardCharts';
-import { RecentActivity } from './dashboard/RecentActivity';
-import { SystemHealth } from './dashboard/SystemHealth';
-import { 
-  Activity,
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import {
+  FileText,
+  Upload,
+  Library,
+  TrendingUp,
+  Clock,
   AlertCircle,
-  RefreshCw
+  CheckCircle,
+  ArrowRight,
+  Plus,
+  Eye,
+  Loader2
 } from 'lucide-react';
 
 interface DashboardData {
@@ -54,21 +59,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Fetch data from multiple endpoints - use proxy routes when available
-      const [contractsRes, aiAnalyticsRes, aiHealthRes] = await Promise.all([
-        fetch('/api/contracts'),
-        fetch('/api/ai/analytics'),
-        fetch('/api/ai/health')
+
+      // Fetch data from multiple endpoints - handle failures gracefully
+      const [contractsRes, aiAnalyticsRes, aiHealthRes] = await Promise.allSettled([
+        fetch('/api/contracts').catch(e => ({ ok: false, error: e.message })),
+        fetch('/api/ai/analytics').catch(e => ({ ok: false, error: e.message })),
+        fetch('/api/ai/health').catch(e => ({ ok: false, error: e.message }))
       ]);
-      
-      if (!contractsRes.ok || !aiAnalyticsRes.ok || !aiHealthRes.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-      
-      const contracts = await contractsRes.json();
-      const aiAnalytics = await aiAnalyticsRes.json();
-      const aiHealth = await aiHealthRes.json();
+
+      // Extract results with fallbacks
+      const contracts = contractsRes.status === 'fulfilled' && contractsRes.value.ok
+        ? await contractsRes.value.json()
+        : { contracts: [], pagination: { total: 0 } };
+
+      const aiAnalytics = aiAnalyticsRes.status === 'fulfilled' && aiAnalyticsRes.value.ok
+        ? await aiAnalyticsRes.value.json()
+        : {};
+
+      const aiHealth = aiHealthRes.status === 'fulfilled' && aiHealthRes.value.ok
+        ? await aiHealthRes.value.json()
+        : { status: 'unknown' };
       
       // Process and aggregate data
       const processedData: DashboardData = {
@@ -133,14 +143,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   if (loading && !dashboardData) {
     return (
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center space-y-4">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-              <p className="text-gray-600">Loading dashboard...</p>
-            </div>
-          </div>
+      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+          <p className="text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -148,117 +154,198 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   if (error && !dashboardData) {
     return (
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center space-y-4">
-              <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
-              <p className="text-red-600">{error}</p>
-              <button
-                onClick={handleRefresh}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
+      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
+        <div className="text-center space-y-4">
+          <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 p-6">
-      <div className="w-full space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">
-              Welcome to the Bloom Energy Contract Management System
-            </p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-500">
-              Last updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never'}
-            </div>
+    <div className="absolute inset-0 overflow-y-auto bg-gradient-to-br from-gray-50 to-white">
+      <div className="max-w-7xl mx-auto px-6 py-12">
+
+        {/* Hero Section */}
+        <div className="mb-16">
+          <h1 className="text-5xl font-bold text-gray-900 mb-3">
+            Welcome back
+          </h1>
+          <p className="text-xl text-gray-500">
+            What would you like to do today?
+          </p>
+        </div>
+
+        {/* Quick Actions - Primary Focus */}
+        <div className="mb-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Create Contract */}
             <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              onClick={() => onNavigate?.('create')}
+              className="group relative bg-white rounded-2xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-green-200 text-left"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="h-5 w-5 text-green-600" />
+              </div>
+              <div className="w-14 h-14 rounded-xl bg-green-50 flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors">
+                <Plus className="h-7 w-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Create Contract
+              </h3>
+              <p className="text-sm text-gray-500">
+                Start from scratch or upload documents
+              </p>
+            </button>
+
+            {/* View Library */}
+            <button
+              onClick={() => onNavigate?.('library')}
+              className="group relative bg-white rounded-2xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-blue-200 text-left"
+            >
+              <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
+                <Library className="h-7 w-7 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Contract Library
+              </h3>
+              <p className="text-sm text-gray-500">
+                Browse and manage all contracts
+              </p>
+            </button>
+
+            {/* Upload Documents */}
+            <button
+              onClick={() => onNavigate?.('documents')}
+              className="group relative bg-white rounded-2xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-purple-200 text-left"
+            >
+              <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="h-5 w-5 text-purple-600" />
+              </div>
+              <div className="w-14 h-14 rounded-xl bg-purple-50 flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors">
+                <Upload className="h-7 w-7 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Upload Documents
+              </h3>
+              <p className="text-sm text-gray-500">
+                Extract data with AI automatically
+              </p>
             </button>
           </div>
         </div>
 
-        {/* Key Metrics */}
+        {/* Stats Overview - Minimal */}
         {dashboardData && (
-          <DashboardStats 
-            stats={dashboardData.stats}
-            loading={loading}
-          />
+          <div className="mb-16">
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-6">
+              Overview
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {/* Total Contracts */}
+              <div className="bg-white rounded-xl p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">Total Contracts</span>
+                  <FileText className="h-4 w-4 text-gray-400" />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">
+                  {dashboardData.stats.totalContracts}
+                </div>
+              </div>
+
+              {/* Contract Value */}
+              <div className="bg-white rounded-xl p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">Total Value</span>
+                  <TrendingUp className="h-4 w-4 text-green-500" />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">
+                  ${(dashboardData.stats.contractValue / 1000000).toFixed(1)}M
+                </div>
+              </div>
+
+              {/* Rules Extracted */}
+              <div className="bg-white rounded-xl p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">Rules Extracted</span>
+                  <CheckCircle className="h-4 w-4 text-blue-500" />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">
+                  {dashboardData.stats.rulesExtracted}
+                </div>
+              </div>
+
+              {/* Time Saved */}
+              <div className="bg-white rounded-xl p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-500">Hours Saved</span>
+                  <Clock className="h-4 w-4 text-purple-500" />
+                </div>
+                <div className="text-3xl font-bold text-gray-900">
+                  {dashboardData.stats.timeSaved}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Quick Actions */}
-          <div className="lg:col-span-1">
-            <QuickActions onNavigate={onNavigate} />
-          </div>
-
-          {/* Charts */}
-          <div className="lg:col-span-2 space-y-6">
-            {dashboardData && (
-              <DashboardCharts 
-                chartData={dashboardData.charts}
-                loading={loading}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Activity */}
-          {dashboardData && (
-            <RecentActivity 
-              activities={dashboardData.recentActivity}
-              loading={loading}
-            />
-          )}
-
-          {/* System Health */}
-          {dashboardData && (
-            <SystemHealth 
-              systemStatus={dashboardData.systemStatus}
-              loading={loading}
-            />
-          )}
-        </div>
-
-        {/* Status Footer */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="flex items-center justify-between text-sm text-gray-500">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-4 w-4" />
-              <span>System Status: </span>
-              <span className={`font-medium ${
-                dashboardData?.systemStatus.overall === 'healthy' 
-                  ? 'text-green-600' 
-                  : dashboardData?.systemStatus.overall === 'partial'
-                  ? 'text-yellow-600'
-                  : 'text-red-600'
-              }`}>
-                {dashboardData?.systemStatus.overall || 'Unknown'}
-              </span>
+        {/* Recent Activity - Simplified */}
+        {dashboardData && dashboardData.recentActivity.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                Recent Activity
+              </h2>
+              <button
+                onClick={() => onNavigate?.('library')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center"
+              >
+                View all
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </button>
             </div>
-            <div>
-              Bloom Energy Contract Management System v1.0.0
+            <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
+              {dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+                <div
+                  key={activity.id || index}
+                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => activity.type === 'contract' && onNavigate?.('library')}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-2 h-2 rounded-full ${
+                        activity.type === 'contract' ? 'bg-green-500' :
+                        activity.type === 'rules' ? 'bg-blue-500' :
+                        activity.type === 'upload' ? 'bg-purple-500' :
+                        'bg-gray-400'
+                      }`} />
+                      <div>
+                        <p className="text-sm text-gray-900">{activity.description}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {new Date(activity.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {activity.type === 'contract' && (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

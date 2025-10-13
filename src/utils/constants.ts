@@ -189,15 +189,18 @@ export const AI_QUICK_ACTIONS = [
 // Navigation tabs configuration
 export const TAB_CONFIG = [
   { id: 'create', label: 'Create', icon: 'Plus', required: false },
+  { id: 'ai-assistant', label: 'AI Assistant', icon: 'Brain', required: false },
   { id: 'basic', label: 'Basic', icon: 'User', required: true },
   { id: 'system', label: 'System', icon: 'Zap', required: true },
   { id: 'financial', label: 'Financial', icon: 'DollarSign', required: true },
   { id: 'operating', label: 'Operating', icon: 'Settings', required: true },
   { id: 'technical', label: 'Technical', icon: 'Cpu', required: true },
+  { id: 'business-rules', label: 'Business Rules', icon: 'Shield', required: false },
   { id: 'summary', label: 'Summary', icon: 'FileText', required: false, readonly: true }
 ];
 
-// Default form values
+// Default form values - used only for NEW manual contract creation, NOT for AI extraction
+// When AI extraction fails, fields should be null or '[EXTRACTION FAILED]', not these defaults
 export const DEFAULT_FORM_VALUES = {
   customerName: '',
   siteLocation: '',
@@ -209,7 +212,7 @@ export const DEFAULT_FORM_VALUES = {
   installationType: 'Ground' as InstallationType,
   baseRate: 65,
   annualEscalation: 3.5,
-  contractTerm: 10,
+  contractTerm: 15, // Changed from 10 to 15 as more common default for new contracts
   microgridAdder: 0,
   thermalCycleFee: 0,
   electricalBudget: 0,

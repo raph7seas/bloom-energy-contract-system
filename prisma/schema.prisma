@@ -36,6 +36,12 @@ model Contract {
   uploads       UploadedFile[]
   documents     ContractDocument[]
   
+  // AI Analysis relationships
+  analyses      ContractAnalysis[]
+  primaryGroups ContractGroup[] @relation("PrimaryContracts")
+  groups        ContractGroup[] @relation("GroupContracts")
+  classifications DocumentClassification[] @relation("ClassificationSuggestions")
+  
   // Metadata
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -132,7 +138,11 @@ model UploadedFile {
   id            String      @id @default(uuid())
   contractId    String?
   contract      Contract?   @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  
+
+  // Temporary contract ID for uploads before contract is created
+  // This field is NOT constrained by foreign key, allowing temp IDs
+  tempContractId String?
+
   fileName      String
   originalName  String
   fileSize      Int         // bytes
@@ -140,16 +150,16 @@ model UploadedFile {
   uploadDate    DateTime    @default(now())
   status        UploadStatus @default(UPLOADING)
   progress      Int         @default(0)
-  
+
   // Extracted data (JSON)
   extractedData Json?
-  
+
   // File storage path
   filePath      String?
-  
+
   // Metadata
   uploadedBy    String?
-  
+
   @@map("uploaded_files")
 }
 
@@ -195,6 +205,13 @@ model ContractDocument {
   // Relationships
   pages             DocumentPage[]
   chunks            DocumentChunk[]
+  
+  // AI Analysis relationships
+  analyses          ContractAnalysis[]
+  sourceSimilarities DocumentSimilarity[] @relation("SourceSimilarities")
+  targetSimilarities DocumentSimilarity[] @relation("TargetSimilarities")
+  groups            ContractGroup[] @relation("GroupDocuments")
+  classification    DocumentClassification?
   
   // Audit
   uploadDate        DateTime            @default(now())
@@ -469,6 +486,207 @@ model Session {
   @@map("sessions")
 }
 
+// AI Contract Analysis Results
+model ContractAnalysis {
+  id                    String    @id @default(uuid())
+  documentId            String?
+  document              ContractDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  contractId            String?
+  contract              Contract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  // Contract classification
+  contractType          String?             // Primary contract type
+  contractSubcategory   String?             // More specific type
+  contractTypeConfidence Float?             // Confidence score 0-1
+  
+  // Extracted parties
+  parties               Json                // Array of party objects with names, roles, confidence
+  partiesConfidence     Float?
+  
+  // Key dates
+  effectiveDate         DateTime?
+  expirationDate        DateTime?
+  signatureDate         DateTime?
+  datesConfidence       Float?
+  
+  // Financial terms
+  totalValue            Float?
+  currency              String?
+  paymentTerms          String?
+  financialConfidence   Float?
+  
+  // Reference numbers and IDs
+  referenceNumbers      Json                // Array of reference objects
+  referenceConfidence   Float?
+  
+  // Subject matter
+  description           String?
+  keywords              String[]            // Array of keywords
+  subjectConfidence     Float?
+  
+  // Critical clauses
+  criticalClauses       Json                // Array of clause objects
+  clausesConfidence     Float?
+  
+  // Overall analysis metadata
+  overallConfidence     Float               @default(0.0)
+  documentQuality       AnalysisQuality     @default(FAIR)
+  analysisNotes         String?
+  
+  // AI processing metadata
+  aiModel               String?             // e.g., "claude-3-sonnet-20240229"
+  processingTime        Int?                // milliseconds
+  tokenUsage            Json?               // Token usage statistics
+  
+  // Raw AI response for debugging
+  rawResponse           String?             @db.Text
+  
+  // Relationships
+  confidenceTracking    AnalysisConfidence[]
+
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@map("contract_analyses")
+}
+
+// Document similarity and relationships
+model DocumentSimilarity {
+  id                    String              @id @default(uuid())
+  
+  // Source and target documents
+  sourceDocumentId      String
+  sourceDocument        ContractDocument    @relation("SourceSimilarities", fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  targetDocumentId      String
+  targetDocument        ContractDocument    @relation("TargetSimilarities", fields: [targetDocumentId], references: [id], onDelete: Cascade)
+  
+  // Similarity metrics
+  overallSimilarity     Float               // 0-1 similarity score
+  typeSimilarity        Float?              // Contract type similarity
+  partySimilarity       Float?              // Party overlap similarity
+  dateSimilarity        Float?              // Date proximity similarity
+  contentSimilarity     Float?              // Subject matter similarity
+  
+  // Relationship classification
+  relationshipType      DocumentRelation
+  relationshipConfidence Float              @default(0.0)
+  
+  // Matching factors
+  matchingFactors       String[]            // Array of factors that matched
+  
+  // AI analysis metadata
+  analysisDate          DateTime            @default(now())
+  aiModel               String?
+  analysisNotes         String?
+  
+  @@unique([sourceDocumentId, targetDocumentId])
+  @@map("document_similarities")
+}
+
+// Contract grouping for related documents
+model ContractGroup {
+  id                    String              @id @default(uuid())
+  name                  String              // Group name/title
+  description           String?             // Group description
+  
+  // Group classification
+  groupType             ContractGroupType   @default(RELATED_CONTRACTS)
+  groupReason           String?             // Why documents are grouped together
+  
+  // Group metadata
+  primaryContractId     String?             // Main/primary contract in group
+  primaryContract       Contract?           @relation("PrimaryContracts", fields: [primaryContractId], references: [id], onDelete: SetNull)
+  
+  // Confidence in grouping decision
+  groupingConfidence    Float               @default(0.0)
+  
+  // Relationships
+  contracts             Contract[]          @relation("GroupContracts")
+  documents             ContractDocument[]  @relation("GroupDocuments")
+  
+  // Auto-grouping metadata
+  autoCreated           Boolean             @default(false)
+  createdBy             String?
+  
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  
+  @@map("contract_groups")
+}
+
+// Analysis confidence tracking for different aspects
+model AnalysisConfidence {
+  id                    String              @id @default(uuid())
+  analysisId            String
+  analysis              ContractAnalysis    @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  
+  // Confidence aspect
+  aspectType            ConfidenceAspect    // What aspect this confidence relates to
+  aspectName            String              // Specific field name
+  
+  // Confidence metrics
+  confidence            Float               // 0-1 confidence score
+  evidenceCount         Int                 @default(0)    // How many evidence points support this
+  evidenceQuality       AnalysisQuality     @default(FAIR)  // Quality of evidence
+  
+  // Supporting evidence
+  evidence              Json?               // Evidence that supports this confidence
+  reasoning             String?             // AI reasoning for this confidence
+  
+  // Thresholds for flagging
+  isHighConfidence      Boolean             @default(false) // >= 0.8
+  isLowConfidence       Boolean             @default(false) // <= 0.3
+  requiresReview        Boolean             @default(false) // Flagged for human review
+  
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  
+  @@unique([analysisId, aspectType, aspectName])
+  @@map("analysis_confidence")
+}
+
+// Document classification suggestions for intelligent upload
+model DocumentClassification {
+  id                    String              @id @default(uuid())
+  documentId            String              @unique
+  document              ContractDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  // Classification suggestions
+  suggestedType         DocumentType
+  typeConfidence        Float               @default(0.0)
+  
+  // Contract association suggestions
+  suggestedContractId   String?
+  suggestedContract     Contract?           @relation("ClassificationSuggestions", fields: [suggestedContractId], references: [id], onDelete: SetNull)
+  contractConfidence    Float               @default(0.0)
+  
+  // Alternative suggestions
+  alternativeTypes      Json                // Array of alternative document types with confidence
+  alternativeContracts  Json                // Array of alternative contract matches
+  
+  // Classification reasoning
+  classificationReason  String?             // AI reasoning for classification
+  keyIndicators         String[]            // Key indicators that led to classification
+  
+  // Processing status
+  status                ClassificationStatus @default(PENDING)
+  reviewRequired        Boolean             @default(false)
+  humanReviewed         Boolean             @default(false)
+  humanReviewedAt       DateTime?
+  humanReviewedBy       String?
+  
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  
+  @@map("document_classifications")
+}
+
+// Enhanced Contract model relationships (add to existing Contract model)
+// Note: These are additions to be made to the existing Contract model
+
 // Enums
 enum SystemType {
   POWER_PURCHASE_STANDARD
@@ -584,6 +802,71 @@ enum ProcessingJobType {
   CONTENT_INDEXING    // Index content for search
   RULE_EXTRACTION     // Extract business rules
   DOCUMENT_VALIDATION // Validate document content
+  CONTRACT_ANALYSIS   // AI-powered contract analysis
+  SIMILARITY_ANALYSIS // Document similarity analysis
   
   @@map("processing_job_type")
+}
+
+// AI Analysis Quality Levels
+enum AnalysisQuality {
+  EXCELLENT   // High confidence, clear extraction
+  GOOD        // Good confidence, reliable data
+  FAIR        // Moderate confidence, some uncertainty
+  POOR        // Low confidence, questionable data
+  FAILED      // Analysis failed or unusable
+  
+  @@map("analysis_quality")
+}
+
+// Document relationship types
+enum DocumentRelation {
+  SAME_CONTRACT       // Same contract (duplicate or version)
+  AMENDMENT           // Amendment to existing contract
+  RELATED_CONTRACT    // Related but separate contract
+  APPENDIX            // Appendix or exhibit to main contract
+  COVER_LETTER        // Cover letter or supporting document
+  UNRELATED          // No meaningful relationship
+  REQUIRES_REVIEW    // Relationship unclear, needs human review
+  
+  @@map("document_relation")
+}
+
+// Contract group types
+enum ContractGroupType {
+  RELATED_CONTRACTS   // Contracts for same client/project
+  CONTRACT_FAMILY     // Main contract with amendments/appendices
+  DUPLICATE_DETECTION // Potential duplicates requiring review
+  TEMPORAL_SEQUENCE   // Contracts in chronological sequence
+  MULTI_PARTY         // Complex multi-party agreement
+  PROJECT_CONTRACTS   // Contracts for same project/site
+  
+  @@map("contract_group_type")
+}
+
+// Confidence aspect types
+enum ConfidenceAspect {
+  CONTRACT_TYPE       // Contract type classification
+  PARTIES            // Party identification
+  DATES              // Date extraction
+  FINANCIAL_TERMS    // Financial information
+  REFERENCE_NUMBERS  // Contract/PO numbers
+  SUBJECT_MATTER     // Content/subject classification
+  CRITICAL_CLAUSES   // Important clauses identification
+  DOCUMENT_QUALITY   // Overall document quality
+  SIMILARITY         // Document similarity assessment
+  
+  @@map("confidence_aspect")
+}
+
+// Document classification status
+enum ClassificationStatus {
+  PENDING            // Classification not started
+  PROCESSING         // Currently being classified
+  COMPLETED          // Classification completed
+  REVIEW_REQUIRED    // Requires human review
+  HUMAN_REVIEWED     // Human has reviewed and confirmed
+  FAILED            // Classification failed
+  
+  @@map("classification_status")
 }

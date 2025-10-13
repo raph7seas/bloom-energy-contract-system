@@ -11,7 +11,9 @@ import { FinancialTab } from './FinancialTab';
 import { OperatingTab } from './OperatingTab';
 import { TechnicalTab } from './TechnicalTab';
 import { SummaryTab } from './SummaryTab';
-import { Plus, User, Zap, DollarSign, Settings, Cpu, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { AIAssistantTab } from './AIAssistantTab';
+import { BusinessRulesDisplay } from '../rules/BusinessRulesDisplay';
+import { Plus, User, Zap, DollarSign, Settings, Cpu, FileText, CheckCircle, AlertCircle, Brain, Shield, Upload, Edit3 } from 'lucide-react';
 
 interface ContractTabsProps {
   formData: ContractFormData;
@@ -23,6 +25,17 @@ interface ContractTabsProps {
   onGenerate: () => void;
   isGenerating: boolean;
   canGenerate: boolean;
+  aiExtractionInfo?: {
+    isAiExtracted: boolean;
+    sourceDocument?: {
+      id: string;
+      name: string;
+      confidence?: number;
+    };
+  };
+  onAiFeedback?: (fieldName: string, correctedValue: any, confidence: number) => void;
+  onCreateFromDocuments?: () => void;
+  onCreateManually?: () => void;
 }
 
 export const ContractTabs: React.FC<ContractTabsProps> = ({
@@ -34,15 +47,21 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
   onFieldChange,
   onGenerate,
   isGenerating,
-  canGenerate
+  canGenerate,
+  aiExtractionInfo,
+  onAiFeedback,
+  onCreateFromDocuments,
+  onCreateManually
 }) => {
   const tabIcons = {
     create: Plus,
+    'ai-assistant': Brain,
     basic: User,
     system: Zap,
     financial: DollarSign,
     operating: Settings,
     technical: Cpu,
+    'business-rules': Shield,
     summary: FileText
   };
 
@@ -55,6 +74,28 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
   return (
     <div className="h-full flex flex-col relative">
       <Tabs value={activeTab} onValueChange={onTabChange} className="h-full flex flex-col">
+        {/* AI Extraction Banner */}
+        {aiExtractionInfo?.isAiExtracted && (
+          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Brain className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-900">
+                  Contract data extracted from: {aiExtractionInfo.sourceDocument?.name}
+                </span>
+                {aiExtractionInfo.sourceDocument?.confidence && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    {Math.round(aiExtractionInfo.sourceDocument.confidence * 100)}% confidence
+                  </Badge>
+                )}
+              </div>
+              <div className="text-xs text-blue-700">
+                Click any field to edit and improve AI accuracy
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab Navigation - Only show when not on create tab */}
         {activeTab !== 'create' && (
           <div className="px-6 py-4 flex-shrink-0">
@@ -97,22 +138,111 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
           <div className="absolute inset-0 overflow-y-auto scrollbar-hide" style={{ paddingBottom: '80px' }}>
             <TabsContent value="create" className="mt-0 p-6 h-full">
               <div className="h-full flex items-center justify-center">
-                <div className="text-center space-y-6">
-                  <div>
+                <div className="max-w-5xl w-full space-y-8">
+                  <div className="text-center">
                     <h1 className="text-3xl font-bold text-gray-900">Create New Contract</h1>
                     <p className="text-lg text-gray-600 mt-2">
-                      Let's build your Bloom Energy service agreement step by step
+                      Choose how you'd like to create your contract
                     </p>
                   </div>
-                  <Button 
-                    onClick={() => onTabChange('basic')}
-                    className="bg-gray-900 hover:bg-gray-800 text-white"
-                    size="lg"
-                  >
-                    Start Contract Creation
-                    <Plus className="ml-2 h-5 w-5" />
-                  </Button>
+
+                  {/* Two-Option Layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Option 1: From Documents */}
+                    <div className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-green-500 hover:shadow-lg transition-all duration-200 cursor-pointer group"
+                         onClick={onCreateFromDocuments}>
+                      <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                          <Upload className="w-8 h-8 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">From Documents</h3>
+                          <p className="text-sm text-gray-600 leading-relaxed">
+                            Upload your contract PDFs and let AI automatically extract all the data for you
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-start text-left w-full space-y-2 text-xs text-gray-500 pt-2">
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                            <span>Fast and automated</span>
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                            <span>Supports multiple documents</span>
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                            <span>AI-powered extraction</span>
+                          </div>
+                        </div>
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white mt-4"
+                          size="lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCreateFromDocuments?.();
+                          }}
+                        >
+                          Upload Documents
+                          <Upload className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Option 2: Manual Entry */}
+                    <div className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-blue-500 hover:shadow-lg transition-all duration-200 cursor-pointer group"
+                         onClick={onCreateManually}>
+                      <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                          <Edit3 className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">Manual Entry</h3>
+                          <p className="text-sm text-gray-600 leading-relaxed">
+                            Create your contract from scratch using our guided step-by-step form
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-start text-left w-full space-y-2 text-xs text-gray-500 pt-2">
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-blue-500" />
+                            <span>Complete control</span>
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-blue-500" />
+                            <span>Guided workflow</span>
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-blue-500" />
+                            <span>No documents needed</span>
+                          </div>
+                        </div>
+                        <Button
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-4"
+                          size="lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCreateManually?.();
+                          }}
+                        >
+                          Start Manual Entry
+                          <Edit3 className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="ai-assistant" className="mt-0 p-6">
+              <div className="max-w-4xl mx-auto">
+                <AIAssistantTab 
+                  formData={formData}
+                  validationErrors={validationErrors}
+                  onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
+                />
               </div>
             </TabsContent>
 
@@ -122,6 +252,8 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
                   formData={formData}
                   validationErrors={validationErrors}
                   onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
                 />
               </div>
             </TabsContent>
@@ -132,6 +264,8 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
                   formData={formData}
                   validationErrors={validationErrors}
                   onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
                 />
               </div>
             </TabsContent>
@@ -142,6 +276,8 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
                   formData={formData}
                   validationErrors={validationErrors}
                   onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
                 />
               </div>
             </TabsContent>
@@ -152,6 +288,8 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
                   formData={formData}
                   validationErrors={validationErrors}
                   onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
                 />
               </div>
             </TabsContent>
@@ -162,6 +300,17 @@ export const ContractTabs: React.FC<ContractTabsProps> = ({
                   formData={formData}
                   validationErrors={validationErrors}
                   onFieldChange={onFieldChange}
+                  aiExtractionInfo={aiExtractionInfo}
+                  onAiFeedback={onAiFeedback}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="business-rules" className="mt-0 p-6">
+              <div className="max-w-6xl mx-auto">
+                <BusinessRulesDisplay 
+                  contractData={formData}
+                  aiExtractionInfo={aiExtractionInfo}
                 />
               </div>
             </TabsContent>

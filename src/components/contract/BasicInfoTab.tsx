@@ -1,7 +1,6 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
+import { AIEnhancedInput } from '../ui/AIEnhancedInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ContractFormData, ValidationError } from '../../types';
 import { INDUSTRY_TYPES } from '../../utils/constants';
@@ -10,13 +9,34 @@ interface BasicInfoTabProps {
   formData: ContractFormData;
   validationErrors: ValidationError;
   onFieldChange: (field: keyof ContractFormData, value: any) => void;
+  aiExtractionInfo?: {
+    isAiExtracted: boolean;
+    sourceDocument?: {
+      id: string;
+      name: string;
+      confidence?: number;
+    };
+  };
+  onAiFeedback?: (fieldName: string, correctedValue: any, confidence: number) => void;
 }
 
 export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   formData,
   validationErrors,
-  onFieldChange
+  onFieldChange,
+  aiExtractionInfo,
+  onAiFeedback
 }) => {
+  // Helper function to get AI extraction info for a specific field
+  const getFieldAiInfo = (fieldName: string) => {
+    if (!aiExtractionInfo?.isAiExtracted) return undefined;
+    return {
+      isAiExtracted: true,
+      fieldName,
+      confidence: 0.85, // This would come from the AI analysis
+      originalValue: formData[fieldName as keyof ContractFormData]
+    };
+  };
   return (
     <div className="space-y-6">
       <div className="mb-6">
@@ -32,25 +52,30 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="customerName">
-                Customer Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="customerName"
-                value={formData.customerName}
-                onChange={(e) => onFieldChange('customerName', e.target.value)}
-                placeholder="Enter customer company name"
-                className={validationErrors.customerName ? 'border-red-500' : ''}
-              />
-              {validationErrors.customerName && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.customerName}</p>
-              )}
-            </div>
+            <AIEnhancedInput
+              id="customerName"
+              label="Customer Name"
+              value={formData.customerName}
+              onChange={(value) => onFieldChange('customerName', value)}
+              placeholder="Enter customer company name"
+              required={true}
+              error={validationErrors.customerName}
+              aiExtractionInfo={getFieldAiInfo('customerName')}
+              onAiFeedback={onAiFeedback}
+            />
 
-            <div>
-              <Label htmlFor="industry">Customer Industry</Label>
-              <Select onValueChange={(value) => onFieldChange('industry', value)}>
+            <AIEnhancedInput
+              id="industry"
+              label="Customer Industry"
+              value={formData.industry}
+              onChange={(value) => onFieldChange('industry', value)}
+              aiExtractionInfo={getFieldAiInfo('industry')}
+              onAiFeedback={onAiFeedback}
+            >
+              <Select 
+                value={formData.industry} 
+                onValueChange={(value) => onFieldChange('industry', value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select industry" />
                 </SelectTrigger>
@@ -62,7 +87,7 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </AIEnhancedInput>
           </div>
         </CardContent>
       </Card>
@@ -72,53 +97,51 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           <CardTitle>Site Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="siteLocation">
-              Site Location <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="siteLocation"
-              value={formData.siteLocation}
-              onChange={(e) => onFieldChange('siteLocation', e.target.value)}
-              placeholder="City, State (e.g., North Haven, CT)"
-              className={validationErrors.siteLocation ? 'border-red-500' : ''}
-            />
-            {validationErrors.siteLocation && (
-              <p className="text-sm text-red-500 mt-1">{validationErrors.siteLocation}</p>
-            )}
-          </div>
+          <AIEnhancedInput
+            id="siteLocation"
+            label="Site Location"
+            value={formData.siteLocation}
+            onChange={(value) => onFieldChange('siteLocation', value)}
+            placeholder="City, State (e.g., North Haven, CT)"
+            required={true}
+            error={validationErrors.siteLocation}
+            aiExtractionInfo={getFieldAiInfo('siteLocation')}
+            onAiFeedback={onAiFeedback}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="facilitySize">Facility Size (sq ft)</Label>
-              <Input
-                id="facilitySize"
-                type="number"
-                placeholder="e.g., 50000"
-                onChange={(e) => onFieldChange('facilitySize', parseInt(e.target.value) || 0)}
-              />
-            </div>
+            <AIEnhancedInput
+              id="facilitySize"
+              label="Facility Size (sq ft)"
+              type="number"
+              value={formData.facilitySize || ''}
+              onChange={(value) => onFieldChange('facilitySize', parseInt(value) || 0)}
+              placeholder="e.g., 50000"
+              aiExtractionInfo={getFieldAiInfo('facilitySize')}
+              onAiFeedback={onAiFeedback}
+            />
 
-            <div>
-              <Label htmlFor="employees">Number of Employees</Label>
-              <Input
-                id="employees"
-                type="number"
-                placeholder="e.g., 250"
-                onChange={(e) => onFieldChange('employees', parseInt(e.target.value) || 0)}
-              />
-            </div>
+            <AIEnhancedInput
+              id="employees"
+              label="Number of Employees"
+              type="number"
+              value={formData.employees || ''}
+              onChange={(value) => onFieldChange('employees', parseInt(value) || 0)}
+              placeholder="e.g., 250"
+              aiExtractionInfo={getFieldAiInfo('employees')}
+              onAiFeedback={onAiFeedback}
+            />
 
-            <div>
-              <Label htmlFor="operatingHours">Operating Hours/Day</Label>
-              <Input
-                id="operatingHours"
-                type="number"
-                placeholder="e.g., 16"
-                max="24"
-                onChange={(e) => onFieldChange('operatingHours', parseInt(e.target.value) || 24)}
-              />
-            </div>
+            <AIEnhancedInput
+              id="operatingHours"
+              label="Operating Hours/Day"
+              type="number"
+              value={formData.operatingHours || ''}
+              onChange={(value) => onFieldChange('operatingHours', parseInt(value) || 24)}
+              placeholder="e.g., 16"
+              aiExtractionInfo={getFieldAiInfo('operatingHours')}
+              onAiFeedback={onAiFeedback}
+            />
           </div>
         </CardContent>
       </Card>
@@ -129,71 +152,68 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="orderDate">
-                Order Date <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="orderDate"
-                type="date"
-                value={formData.orderDate}
-                onChange={(e) => onFieldChange('orderDate', e.target.value)}
-                className={validationErrors.orderDate ? 'border-red-500' : ''}
-              />
-              {validationErrors.orderDate && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.orderDate}</p>
-              )}
-            </div>
+            <AIEnhancedInput
+              id="orderDate"
+              label="Order Date"
+              type="date"
+              value={formData.orderDate}
+              onChange={(value) => onFieldChange('orderDate', value)}
+              required={true}
+              error={validationErrors.orderDate}
+              aiExtractionInfo={getFieldAiInfo('orderDate')}
+              onAiFeedback={onAiFeedback}
+            />
 
-            <div>
-              <Label htmlFor="effectiveDate">
-                Effective Date <span className="text-red-500">*</span>
-              </Label>
-              <Input
+            <div className="space-y-2">
+              <AIEnhancedInput
                 id="effectiveDate"
+                label="Effective Date"
                 type="date"
                 value={formData.effectiveDate}
-                onChange={(e) => onFieldChange('effectiveDate', e.target.value)}
-                className={validationErrors.effectiveDate ? 'border-red-500' : ''}
+                onChange={(value) => onFieldChange('effectiveDate', value)}
+                required={true}
+                error={validationErrors.effectiveDate}
+                aiExtractionInfo={getFieldAiInfo('effectiveDate')}
+                onAiFeedback={onAiFeedback}
               />
-              {validationErrors.effectiveDate && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.effectiveDate}</p>
-              )}
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500">
                 When the contract terms become active
               </p>
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="contactPerson">Primary Contact</Label>
-            <Input
-              id="contactPerson"
-              placeholder="Contact name and role"
-              onChange={(e) => onFieldChange('contactPerson', e.target.value)}
-            />
-          </div>
+          <AIEnhancedInput
+            id="contactPerson"
+            label="Primary Contact"
+            value={formData.contactPerson || ''}
+            onChange={(value) => onFieldChange('contactPerson', value)}
+            placeholder="Contact name and role"
+            aiExtractionInfo={getFieldAiInfo('contactPerson')}
+            onAiFeedback={onAiFeedback}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="contactEmail">Contact Email</Label>
-              <Input
-                id="contactEmail"
-                type="email"
-                placeholder="contact@company.com"
-                onChange={(e) => onFieldChange('contactEmail', e.target.value)}
-              />
-            </div>
+            <AIEnhancedInput
+              id="contactEmail"
+              label="Contact Email"
+              type="email"
+              value={formData.contactEmail || ''}
+              onChange={(value) => onFieldChange('contactEmail', value)}
+              placeholder="contact@company.com"
+              aiExtractionInfo={getFieldAiInfo('contactEmail')}
+              onAiFeedback={onAiFeedback}
+            />
 
-            <div>
-              <Label htmlFor="contactPhone">Contact Phone</Label>
-              <Input
-                id="contactPhone"
-                type="tel"
-                placeholder="(555) 123-4567"
-                onChange={(e) => onFieldChange('contactPhone', e.target.value)}
-              />
-            </div>
+            <AIEnhancedInput
+              id="contactPhone"
+              label="Contact Phone"
+              type="tel"
+              value={formData.contactPhone || ''}
+              onChange={(value) => onFieldChange('contactPhone', value)}
+              placeholder="(555) 123-4567"
+              aiExtractionInfo={getFieldAiInfo('contactPhone')}
+              onAiFeedback={onAiFeedback}
+            />
           </div>
         </CardContent>
       </Card>

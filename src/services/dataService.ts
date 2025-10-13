@@ -3,7 +3,7 @@
  * Acts as a facade for all data operations with proper error handling and fallbacks
  */
 
-import contractService from './contractService';
+import { contractService } from './contractService';
 import { loadFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 export interface LearnedRule {

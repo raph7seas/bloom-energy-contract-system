@@ -77,7 +77,7 @@ function FooterLogo() {
 }
 
 export function LoginForm({ onToggleMode }) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -86,7 +86,7 @@ export function LoginForm({ onToggleMode }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const result = await login(email, password);
+    const result = await login(username, password);
     setLoading(false);
     if (result.success) {
       // Login successful - AuthContext handles redirect
@@ -136,8 +136,8 @@ export function LoginForm({ onToggleMode }) {
                   <input
                     type="email"
                     placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="flex-1 bg-transparent font-poppins text-[12px] text-[#272b30] placeholder-[#868f9b] border-none outline-none"
                     required
                   />

@@ -14,7 +14,20 @@ export const authenticate = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
+    if (!req.prisma) {
+      // Database unavailable – trust the token payload (development fallback)
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email,
+        role: decoded.role,
+        firstName: decoded.firstName || 'Fallback',
+        lastName: decoded.lastName || 'User',
+        isActive: true
+      };
+      return next();
+    }
+
     // Check if session is active
     const session = await req.prisma.session.findFirst({
       where: {
@@ -85,6 +98,18 @@ export const optionalAuth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
     
+    if (!req.prisma) {
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email,
+        firstName: decoded.firstName || 'Fallback',
+        lastName: decoded.lastName || 'User',
+        role: decoded.role,
+        isActive: true
+      };
+      return next();
+    }
+
     const session = await req.prisma.session.findFirst({
       where: {
         token,

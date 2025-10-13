@@ -28,9 +28,11 @@ class ContractService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      
+
       // Transform backend format to frontend format
-      return data.contracts?.map((contract: any) => this.transformContractFromAPI(contract)) || [];
+      // API returns either an array directly or {contracts: [...]}
+      const contractsArray = Array.isArray(data) ? data : (data.contracts || []);
+      return contractsArray.map((contract: any) => this.transformContractFromAPI(contract));
     } catch (error) {
       console.error('Failed to fetch contracts from API, falling back to localStorage:', error);
       return loadFromLocalStorage(STORAGE_KEYS.CONTRACTS, []);
@@ -297,6 +299,11 @@ class ContractService {
 
   // Transform contract from API format to frontend format
   private transformContractFromAPI(apiContract: any): Contract {
+    // Support both database format (financial/technical/operating) and in-memory format (financialParams/technicalParams/operatingParams)
+    const financial = apiContract.financial || apiContract.financialParams || {};
+    const technical = apiContract.technical || apiContract.technicalParams || {};
+    const operating = apiContract.operating || apiContract.operatingParams || {};
+
     return {
       id: apiContract.id,
       name: apiContract.name,
@@ -312,28 +319,28 @@ class ContractService {
       yearlyRate: apiContract.yearlyRate || 0,
       parameters: {
         financial: {
-          baseRate: apiContract.financial?.baseRate || 0,
-          microgridAdder: apiContract.financial?.microgridAdder || 0,
-          escalation: apiContract.financial?.escalation || 0,
-          thermalCycleFee: apiContract.financial?.thermalCycleFee || 0,
-          electricalBudget: apiContract.financial?.electricalBudget || 0,
-          commissioningAllowance: apiContract.financial?.commissioningAllowance || 0
+          baseRate: financial.baseRate || 0,
+          microgridAdder: financial.microgridAdder || 0,
+          escalation: financial.escalation || 0,
+          thermalCycleFee: financial.thermalCycleFee || 0,
+          electricalBudget: financial.electricalBudget || 0,
+          commissioningAllowance: financial.commissioningAllowance || 0
         },
         technical: {
-          voltage: this.mapVoltageFromAPI(apiContract.technical?.voltage),
-          gridVoltage: this.mapVoltageFromAPI(apiContract.technical?.gridVoltage || apiContract.technical?.voltage),
-          servers: apiContract.technical?.servers || 0,
-          components: this.mapComponentsFromAPI(apiContract.technical?.components) || [],
-          recType: apiContract.technical?.recType
+          voltage: this.mapVoltageFromAPI(technical.voltage),
+          gridVoltage: this.mapVoltageFromAPI(technical.gridVoltage || technical.voltage),
+          servers: technical.servers || 0,
+          components: this.mapComponentsFromAPI(technical.components) || [],
+          recType: technical.recType
         },
         operating: {
-          outputWarranty: apiContract.operating?.outputWarranty || 0,
-          efficiency: apiContract.operating?.efficiency || 0,
+          outputWarranty: operating.outputWarranty || 0,
+          efficiency: operating.efficiency || 0,
           demandRange: {
-            min: apiContract.operating?.minDemand || 0,
-            max: apiContract.operating?.maxDemand || 0
+            min: operating.minDemand || 0,
+            max: operating.maxDemand || 0
           },
-          criticalOutput: apiContract.operating?.criticalOutput || 0
+          criticalOutput: operating.criticalOutput || 0
         }
       },
       notes: apiContract.notes || '',

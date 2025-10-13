@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
-import localTextractService from '../services/localTextractService.js';
+import textractManager from '../services/textractManager.js';
 import fileService from '../services/fileService.js';
 
 const router = express.Router();
@@ -10,7 +10,7 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 100 * 1024 * 1024, // 100MB (increased for AWS support)
     files: 1
   },
   fileFilter: (req, file, cb) => {
@@ -47,8 +47,8 @@ router.post('/analyze-document', optionalAuth, upload.single('document'), async 
     
     console.log(`📄 Analyzing document: ${req.file.originalname} (${req.file.mimetype})`);
 
-    // Process document through LocalTextractService
-    const result = await localTextractService.analyzeDocument(req.file.buffer, {
+    // Process document through TextractManager (intelligently routes to AWS or Local)
+    const result = await textractManager.analyzeDocument(req.file.buffer, {
       documentType: req.file.mimetype.startsWith('image/') ? 'image' : 'pdf',
       features: Array.isArray(features) ? features : [features],
       blocks: true
@@ -56,8 +56,14 @@ router.post('/analyze-document', optionalAuth, upload.single('document'), async 
 
     // Log processing results
     if (result.JobStatus === 'SUCCEEDED') {
-      const textLength = localTextractService.extractTextFromBlocks(result.Blocks).length;
-      console.log(`✅ OCR completed: ${result.Blocks?.length || 0} blocks, ${textLength} characters`);
+      const textLength = result.Text?.length || 0;
+      const provider = result.processingMetadata?.provider || 'unknown';
+      console.log(`✅ OCR completed via ${provider}: ${result.Blocks?.length || 0} blocks, ${textLength} characters`);
+      
+      // Log cost information if using AWS
+      if (provider === 'aws' && result.processingMetadata?.estimatedCost) {
+        console.log(`💰 Estimated cost: $${result.processingMetadata.estimatedCost.toFixed(4)}`);
+      }
     } else {
       console.log(`❌ OCR failed: ${result.StatusMessage}`);
     }
@@ -117,8 +123,8 @@ router.post('/start-document-analysis', optionalAuth, upload.single('document'),
     
     console.log(`🚀 Starting async analysis: ${req.file.originalname}`);
 
-    // Start async processing
-    const result = await localTextractService.startDocumentAnalysis(req.file.buffer, {
+    // Start async processing via TextractManager
+    const result = await textractManager.startDocumentAnalysis(req.file.buffer, {
       documentType: req.file.mimetype.startsWith('image/') ? 'image' : 'pdf',
       features: Array.isArray(features) ? features : [features],
       clientRequestToken
@@ -145,7 +151,7 @@ router.post('/start-document-analysis', optionalAuth, upload.single('document'),
 router.get('/get-document-analysis/:jobId', optionalAuth, async (req, res) => {
   try {
     const { jobId } = req.params;
-    const result = localTextractService.getDocumentAnalysis(jobId);
+    const result = textractManager.getJobResult(jobId);
     
     res.json(result);
 
@@ -182,7 +188,7 @@ router.post('/batch-analyze', optionalAuth, upload.array('documents', 10), async
       try {
         console.log(`   Processing ${index + 1}/${req.files.length}: ${file.originalname}`);
         
-        const result = await localTextractService.analyzeDocument(file.buffer, {
+        const result = await textractManager.analyzeDocument(file.buffer, {
           documentType: file.mimetype.startsWith('image/') ? 'image' : 'pdf',
           features: Array.isArray(features) ? features : [features],
           blocks: true
@@ -197,7 +203,7 @@ router.post('/batch-analyze', optionalAuth, upload.array('documents', 10), async
           documentMetadata: result.DocumentMetadata,
           blocks: result.Blocks,
           textExtracted: result.JobStatus === 'SUCCEEDED' 
-            ? localTextractService.extractTextFromBlocks(result.Blocks)
+            ? result.Text || ''
             : '',
           processingTime: result.ProcessingTime
         });
@@ -239,7 +245,7 @@ router.post('/batch-analyze', optionalAuth, upload.array('documents', 10), async
  */
 router.get('/service-status', optionalAuth, async (req, res) => {
   try {
-    const status = localTextractService.getStatus();
+    const status = textractManager.getStatus();
     
     res.json({
       ...status,
@@ -271,11 +277,11 @@ router.post('/cleanup-jobs', authenticate, async (req, res) => {
     }
 
     const { maxAgeHours = 24 } = req.body;
-    const remainingJobs = localTextractService.cleanupCompletedJobs(maxAgeHours * 60 * 60 * 1000);
+    const cleaned = textractManager.cleanupCompletedJobs(maxAgeHours * 60 * 60 * 1000);
     
     res.json({
       message: 'Job cleanup completed',
-      remainingActiveJobs: remainingJobs,
+      jobsCleaned: cleaned,
       maxAgeHours
     });
 

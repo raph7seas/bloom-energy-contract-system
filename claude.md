@@ -1,452 +1,300 @@
-# CLAUDE.md - Claude Code Session Guide
+# CLAUDE.md
 
-# MCP Servers
-## Figma Dev Mode MCP Rules
-  - The Figma Dev Mode MCP Server provides an assets endpoint which can serve image and SVG assets
-  - IMPORTANT: If the Figma Dev Mode MCP Server returns a localhost source for an image or an SVG, use that image or SVG source directly
-  - IMPORTANT: DO NOT import/add new icon packages, all the assets should be in the Figma payload
-  - IMPORTANT: do NOT use or create placeholders if a localhost source is provided
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## ⚡ IMPORTANT - START EVERY SESSION WITH THIS
+## Project Overview
+Bloom Energy Contract Learning & Rules Management System - an AI-powered platform for creating, managing, and learning from energy service contracts. The system extracts business rules from contracts and exports them to a centralized management platform.
 
-**Always read PLANNING.md at the start of every new conversation, check TASKS.md before starting your work, mark completed tasks to TASKS.md immediately, and add newly discovered tasks to TASKS.md when found.**
+## Commands
 
----
+### Development
+```bash
+# Start full stack development
+npm run dev:full         # Runs both frontend (port 4000) and backend (port 4003)
 
-## 🎯 Project Overview
+# Frontend only
+npm run dev             # Vite dev server on port 4000
+npm run build          # Build production frontend
+npm run preview        # Preview production build
 
-You are working on the **Bloom Energy Contract Learning & Rules Management System** - an AI-powered platform for creating, managing, and learning from energy service contracts. This system extracts business rules from contracts and exports them to a centralized management platform.
+# Backend only
+npm run server:dev     # Nodemon dev server on port 4003
+npm run server:start   # Production server
 
-### Core Purpose
-1. **Contract Operations**: Create and manage energy service agreements in minutes instead of days
-2. **Rules Intelligence**: Extract and export business rules to the management platform
-3. **Learning System**: Continuously improve from historical contracts
-
-### Key Metrics
-- Reduce contract creation time from 3 days to 30 minutes
-- Achieve 95% accuracy in rule extraction
-- Cut costs from $500 to $50 per contract
-
----
-
-## 🏗️ Current Implementation Status
-
-### ✅ Completed Features
-- [x] 7-tab contract configuration interface
-- [x] Basic validation system
-- [x] Local storage persistence
-- [x] Contract generation (JSON export)
-- [x] Contract library with search/filter
-- [x] Template system
-- [x] Comparison tool (up to 4 contracts)
-- [x] AI Assistant interface (UI only)
-- [x] Document upload UI
-- [x] Stats dashboard
-- [x] Bloom Energy logo integration
-
-### 🚧 In Progress / To Do
-- [ ] PostgreSQL integration
-- [ ] AWS deployment
-- [ ] Full Anthropic API integration
-- [ ] AWS Textract integration
-- [ ] Rule extraction engine
-- [ ] Pattern recognition system
-- [ ] Version control
-- [ ] Audit trail
-- [ ] Management platform API
-- [ ] Webhook system
-- [ ] Real-time sync
-
----
-
-## 💻 Technical Stack
-
-### Frontend (Current Implementation)
-```javascript
-{
-  framework: 'React 18+',
-  ui: 'Shadcn/ui',
-  styling: 'Tailwind CSS',
-  icons: 'Lucide React',
-  state: 'React hooks + localStorage',
-  validation: 'Inline validation',
-  build: 'Vite (assumed)',
-  charts: 'Recharts (ready to use)'
-}
+# Type checking
+npm run lint           # TypeScript check
+npm run type-check     # TypeScript no-emit check
 ```
 
-### Backend (To Be Implemented)
-```javascript
-{
-  runtime: 'Node.js 20+',
-  framework: 'Express.js or NestJS',
-  database: 'PostgreSQL (AWS RDS)',
-  cache: 'Redis (ElastiCache)',
-  storage: 'AWS S3',
-  ai: 'Anthropic Claude API',
-  ocr: 'AWS Textract'
-}
+### Database
+```bash
+npm run db:generate    # Generate Prisma client
+npm run db:migrate     # Run database migrations
+npm run db:reset       # Reset database
+npm run db:studio      # Open Prisma Studio GUI
+npm run db:seed        # Seed database with test data
+npm run db:setup       # Full setup: migrate + seed
 ```
 
----
-
-## 📁 Project Structure
-
-```
-bloom-energy-contract-system/
-├── src/
-│   ├── components/
-│   │   ├── BloomContractLearningSystem.jsx  # Main component
-│   │   └── ui/                              # Shadcn components
-│   ├── services/
-│   │   ├── contractService.js               # Contract operations
-│   │   ├── aiService.js                     # AI integration
-│   │   └── rulesService.js                  # Rules extraction
-│   ├── utils/
-│   │   ├── validation.js                    # Validation logic
-│   │   └── calculations.js                  # Financial calculations
-│   └── store/
-│       └── contractStore.js                 # State management
-├── PLANNING.md                               # Project planning document
-├── TASKS.md                                  # Task tracking
-├── CLAUDE.md                                 # This file
-└── README.md                                 # Project documentation
+### Testing
+```bash
+npm test                    # Run all tests
+npm run test:watch         # Watch mode
+npm run test:coverage      # Coverage report
+npm run test:frontend      # Frontend tests only
+npm run test:backend       # Backend tests only
+npm run test:unit         # Unit tests only
+npm run test:integration  # Integration tests only
 ```
 
----
-
-## 🔑 Key Components & Features
-
-### 1. Contract Creation Tabs
-```javascript
-// Tab structure with validation states
-const tabs = [
-  { id: 'create', label: 'Create', icon: Plus },
-  { id: 'basic', label: 'Basic', required: true },
-  { id: 'system', label: 'System', required: true },
-  { id: 'financial', label: 'Financial', required: true },
-  { id: 'operating', label: 'Operating', required: true },
-  { id: 'technical', label: 'Technical', required: true },
-  { id: 'summary', label: 'Summary', readonly: true }
-];
+### Data Migration
+```bash
+npm run migrate:localStorage  # Migrate localStorage data to PostgreSQL
 ```
 
-### 2. Contract Data Model
-```javascript
-const contractSchema = {
-  id: 'BEC-${uniqueId}',
-  client: { name, industry, site },
-  system: {
-    solutionType: 'PP|MG|AMG|OG',
-    capacity: 'multiples of 325kW',
-    reliability: '3-9s to 5-9s'
-  },
-  financial: {
-    baseRate: Number,
-    escalation: 2.0-5.0,
-    term: [5,10,15,20]
-  },
-  technical: {
-    voltage: ['480V','4.16kV','13.2kV','34.5kV'],
-    components: ['RI','AC','UC','BESS']
-  }
-};
+## Architecture
+
+### Technology Stack
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + Shadcn/ui
+- **Backend**: Node.js + Express + Prisma ORM
+- **Database**: PostgreSQL
+- **AI**: Anthropic Claude API (with OpenAI fallback)
+- **Auth**: JWT with role-based access control
+- **File Processing**: Multi-format support (PDF, DOCX, TXT, Images)
+- **Real-time**: Socket.io for notifications
+
+### Project Structure
+```
+ContractRulesEngine/
+├── src/                    # Frontend React application
+│   ├── components/         # React components
+│   │   └── BloomContractLearningSystem.jsx  # Main component (7-tab interface)
+│   ├── main.tsx           # Application entry
+│   └── index.css          # Global styles
+├── server/                 # Backend Node.js application
+│   └── src/
+│       ├── routes/        # API endpoints
+│       ├── services/      # Business logic
+│       ├── middleware/    # Express middleware
+│       └── server.js      # Server entry (port 4003)
+├── prisma/                # Database schema
+│   └── schema.prisma      # Prisma models
+├── generated/             # Generated Prisma client
+└── uploads/              # File upload storage
 ```
 
-### 3. Learning System Rules
-```javascript
-const learnedRules = {
-  capacityRange: { min: 200, max: 2000 },
-  termRange: { min: 5, max: 20 },
-  systemTypes: ['PP', 'MG', 'AMG', 'OG'],
-  voltageOptions: ['208V', '480V', '4.16kV', '13.2kV', '34.5kV'],
-  componentOptions: ['RI', 'AC', 'UC', 'BESS', 'Solar'],
-  escalationRange: { min: 2.0, max: 5.0 }
-};
+### Key API Endpoints
+
+#### Contracts
+- `GET /api/contracts` - List contracts with filters
+- `POST /api/contracts` - Create contract
+- `GET /api/contracts/:id` - Get contract details
+- `PUT /api/contracts/:id` - Update contract
+- `DELETE /api/contracts/:id` - Delete contract
+
+#### AI Services
+- `POST /api/ai/chat` - AI assistant chat
+- `POST /api/ai/analyze` - Contract analysis
+- `GET /api/ai/health` - Service status
+- `GET /api/ai/analytics` - Usage analytics
+
+#### Rules Engine
+- `GET /api/rules` - List learned rules
+- `POST /api/rules/extract/:contractId` - Extract rules
+- `POST /api/rules/validate/:contractId` - Validate against rules
+- `GET /api/rules/statistics` - Rule statistics
+
+#### File Processing
+- `POST /api/uploads/single` - Single file upload
+- `POST /api/uploads/multiple` - Multiple files
+- `GET /api/uploads/:id/content` - Get extracted content
+
+#### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `GET /api/auth/profile` - User profile
+
+## Key Implementation Details
+
+### Contract Data Model
+The contract system uses a 7-tab configuration interface:
+1. **Create** - Start new contract or from template
+2. **Basic** - Client info, site, term
+3. **System** - Solution type (PP/MG/AMG/OG), capacity (325kW multiples)
+4. **Financial** - Base rate, escalation (2-5%), payment terms
+5. **Operating** - Output warranty, efficiency, demand response
+6. **Technical** - Voltage levels, components (RI/AC/UC/BESS)
+7. **Summary** - Review and generate contract
+
+### Prisma Models
+- **Contract** - Core contract with relationships to params
+- **FinancialParams** - Financial configuration
+- **TechnicalParams** - Technical specifications
+- **OperatingParams** - Operating parameters
+- **ContractTemplate** - Reusable templates
+- **ExtractedRule** - Business rules from contracts
+- **User** - Authentication and authorization
+
+### AI Integration
+- **Primary**: AWS Bedrock (Anthropic Claude via AWS)
+  - Model: `anthropic.claude-3-5-sonnet-20241022-v2:0`
+  - Region: `us-west-2`
+  - Requires: Bedrock model access enabled in AWS Console
+- **Fallback**: Direct Anthropic Claude API (`claude-3-5-sonnet`)
+- **Alternative Models**:
+  - Claude 3.5 Haiku: `anthropic.claude-3-5-haiku-20241022-v1:0`
+  - Claude Sonnet 4.5: `anthropic.claude-sonnet-4-5-v2:0`
+- **Caching**: Redis for response caching
+- **Features**: Contract analysis, optimization, rule extraction, document processing
+- **Backend Service**: [server/src/services/bedrockService.js](server/src/services/bedrockService.js)
+- **AI Manager**: [server/src/services/aiService.js](server/src/services/aiService.js)
+
+### Validation Rules
+- Capacity: Must be multiples of 325kW (325-3900kW range)
+- Escalation: 2.0-5.0% annual range
+- Term: 5, 10, 15, or 20 years
+- Voltage: 208V, 480V, 4.16kV, 13.2kV, 34.5kV
+- Solution Types: PP (Power Purchase), MG (Microgrid), AMG (Advanced Microgrid), OG (Onsite Generation)
+
+### Environment Variables
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/bloom_contracts"
+
+# Server
+JWT_SECRET="your-jwt-secret"
+PORT=4003
+UPLOAD_DIR="./uploads"
+NODE_ENV="development"
+
+# AI Provider Configuration
+DEFAULT_AI_PROVIDER="bedrock"  # Options: "bedrock", "anthropic", "openai"
+
+# AWS Bedrock (Primary)
+AWS_REGION="us-west-2"
+AWS_ACCESS_KEY_ID="your-aws-access-key"
+AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
+AWS_SESSION_TOKEN="your-aws-session-token"  # For SSO temporary credentials
+BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20241022-v2:0"
+BEDROCK_MAX_TOKENS="2000"
+BEDROCK_TEMPERATURE="0.5"
+BEDROCK_TOP_K="250"
+BEDROCK_TOP_P="1"
+
+# Anthropic Direct API (Fallback)
+ANTHROPIC_API_KEY="sk-ant-..."
+ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
+
+# OpenAI (Optional)
+OPENAI_API_KEY="sk-..."
 ```
 
----
+### AWS Bedrock Setup
 
-## 🔧 Working with the Codebase
+**Prerequisites:**
+1. AWS account with SSO access to Bloom Energy account
+2. Bedrock model access enabled for your IAM role
 
-### Adding New Features
-1. Check `TASKS.md` for the specific task
-2. Review existing patterns in the codebase
-3. Follow the 7-tab structure for new contract fields
-4. Update validation rules
-5. Persist new data to localStorage
-6. Update the learning rules if applicable
-7. Mark task complete in `TASKS.md`
+**Getting AWS Credentials:**
+1. Login to AWS SSO: `https://d-926752529b.awsapps.com/start/#`
+2. Select account: `BE_SMARTFACTORY_DEV (384680562925)`
+3. Select role: `SSOAWS-7Seas-Vendor-Admins`
+4. Click "Command line or programmatic access"
+5. Copy environment variables to `.env` file
 
-### Common Patterns
+**Enabling Bedrock Model Access:**
+1. Go to AWS Bedrock Console: https://console.aws.amazon.com/bedrock/
+2. Select region: **us-west-2** (top-right corner)
+3. Click **"Model access"** in left sidebar
+4. Click **"Manage model access"**
+5. Enable these models:
+   - ✅ Anthropic Claude 3.5 Sonnet
+   - ✅ Anthropic Claude 3.5 Haiku
+   - ✅ Anthropic Claude Sonnet 4.5
+6. Submit request (usually instant approval)
 
-#### Validation Pattern
-```javascript
-const validateContract = () => {
-  const errors = {};
-  
-  if (!customerName) errors.customerName = "Customer name is required";
-  if (guaranteedCriticalOutput > ratedCapacity) {
-    errors.criticalOutput = "Critical output cannot exceed rated capacity";
-  }
-  
-  setValidationErrors(errors);
-  return Object.keys(errors).length === 0;
-};
+**Testing Bedrock Connection:**
+```bash
+# Test with Node.js
+node test-bedrock-quick.js
+
+# Test with Python
+python3 test-bedrock-python.py
+
+# Test through backend API
+python3 test-backend-api.py
 ```
 
-#### AI Integration Pattern
-```javascript
-const handleAiSubmit = async () => {
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: aiInput }]
-      })
-    });
-    const data = await response.json();
-    // Process response
-  } catch (error) {
-    // Fallback to mock response
-  }
-};
-```
+**Common Issues:**
+- `ExpiredTokenException`: AWS SSO credentials expired - get new ones from SSO
+- `AccessDeniedException`: Bedrock model access not enabled - contact AWS admin
+- Server shows "anthropic" provider: Check `.env` has `DEFAULT_AI_PROVIDER="bedrock"`
 
-#### LocalStorage Pattern
-```javascript
-const saveToLocalStorage = (key, data) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error('Failed to save to localStorage:', error);
-  }
-};
+## Development Guidelines
 
-const loadFromLocalStorage = (key, defaultValue) => {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
-};
-```
+### Frontend Development
+- Components use functional React with hooks
+- State management via React hooks + Context
+- Form validation with inline validation
+- LocalStorage fallback for offline mode
+- Responsive design with Tailwind CSS
 
----
+### Backend Development
+- RESTful API design principles
+- Middleware for auth, validation, error handling
+- Service layer for business logic
+- Prisma for type-safe database access
+- Comprehensive error handling with custom error classes
 
-## 🚀 Development Workflow
+### Security Practices
+- JWT tokens with 15-minute expiry
+- Refresh tokens for session management
+- Input validation with Joi schemas
+- SQL injection prevention via Prisma
+- XSS protection with helmet.js
+- Rate limiting on API endpoints
+- File upload validation and sanitization
 
-### Starting a New Feature
-1. Read `PLANNING.md` for project context
-2. Check `TASKS.md` for your assigned task
-3. Review related components in the codebase
-4. Implement the feature following existing patterns
-5. Test thoroughly with edge cases
-6. Update `TASKS.md` with completion status
-7. Add any newly discovered tasks to `TASKS.md`
+### Testing Strategy
+- Unit tests for services and utilities
+- Integration tests for API endpoints
+- Frontend component testing with React Testing Library
+- Mock data for consistent testing
+- Coverage targets: 80% for critical paths
 
-### Testing Checklist
-- [ ] All form validations work correctly
-- [ ] Data persists to localStorage
-- [ ] UI updates reflect state changes
-- [ ] Contract generation produces valid JSON
-- [ ] Search and filter functions work
-- [ ] AI recommendations apply correctly
-- [ ] No console errors in browser
+## Common Development Tasks
 
-### Common Tasks
+### Add a New Contract Field
+1. Update Prisma schema in `prisma/schema.prisma`
+2. Run `npm run db:migrate` to update database
+3. Update validation in `server/src/services/validationService.js`
+4. Add field to frontend tab in `src/components/BloomContractLearningSystem.jsx`
+5. Update contract generation logic
 
-#### Add a New Contract Field
-1. Add field to state in main component
-2. Add UI element to appropriate tab
-3. Add validation rule if required
-4. Include in contract generation
-5. Update summary display
-6. Add to contract data model
+### Create a New API Endpoint
+1. Add route in `server/src/routes/`
+2. Create service in `server/src/services/`
+3. Add validation middleware if needed
+4. Update API documentation
+5. Write tests for endpoint
 
-#### Integrate a New API
-1. Create service file in `/services`
-2. Add environment variables for API keys
-3. Implement error handling and fallbacks
-4. Add loading states to UI
-5. Update relevant components
+### Implement a New AI Feature
+1. Add endpoint in `server/src/routes/ai.js`
+2. Update AI service in `server/src/services/aiService.js`
+3. Add caching logic if appropriate
+4. Implement fallback for API failures
+5. Track usage for analytics
 
-#### Fix a Bug
-1. Reproduce the issue
-2. Check browser console for errors
-3. Review component state and props
-4. Check localStorage data
-5. Fix and test edge cases
-6. Update `TASKS.md`
+## Performance Considerations
+- Frontend bundle optimization with Vite
+- API response caching with Redis
+- Database query optimization with Prisma
+- Lazy loading for large datasets
+- WebSocket for real-time updates
 
----
-
-## 🐛 Common Issues & Solutions
-
-### Issue: Contract not saving
-```javascript
-// Check localStorage quota
-if (e.name === 'QuotaExceededError') {
-  // Clear old data or notify user
-}
-```
-
-### Issue: AI responses not working
-```javascript
-// Always implement fallback
-if (!response.ok) {
-  return generateMockResponse(input);
-}
-```
-
-### Issue: Validation errors not showing
-```javascript
-// Ensure state updates trigger re-render
-setValidationErrors({...validationErrors, [field]: error});
-```
-
----
-
-## 📊 Important Business Logic
-
-### Capacity Constraints
-- Must be in multiples of 325 kW
-- Range: 325 kW to 3900 kW
-- Based on Bloom Energy Configurator specifications
-
-### Financial Calculations
-```javascript
-// Yearly rate escalation
-const escalationMultiplier = Math.pow(1 + annualEscalation / 100, year);
-const yearlyRate = baseRate * escalationMultiplier;
-
-// Total contract value
-const totalValue = ratedCapacity * sumOfYearlyRates * 12;
-```
-
-### Rule Confidence Scoring
-- Extract from multiple contracts
-- Calculate occurrence frequency
-- Set confidence threshold at 0.7
-- Flag anomalies below 0.5
-
----
-
-## 🔗 Integration Points
-
-### Management Platform API (To Be Implemented)
-```javascript
-// Export rules endpoint
-POST /api/rules/export
-{
-  ruleSet: extractedRules,
-  confidence: confidenceScores,
-  sourceContracts: contractIds
-}
-
-// Validation endpoint
-POST /api/validate
-{
-  contract: contractData,
-  rules: applicableRules
-}
-```
-
-### Bloom Configurator Integration
-- System types: PP, MG, AMG, OG
-- Installation types: PES, Ground, Stacked
-- Reliability levels: 3-9s through 5-9s
-- Component compatibility matrix
-
----
-
-## 📝 Code Style Guidelines
-
-### React Components
-- Use functional components with hooks
-- Keep components under 200 lines
-- Extract complex logic to custom hooks
-- Use descriptive variable names
-
-### State Management
-- Use local state for UI-only state
-- Use context or store for shared state
-- Persist critical data to localStorage
-- Clear stale data periodically
-
-### Error Handling
-- Always provide user feedback
-- Log errors to console in development
-- Implement graceful degradation
-- Provide fallback UI components
-
----
-
-## 🔄 Git Workflow
-
-### Branch Naming
-- `feature/contract-validation`
-- `fix/ai-response-error`
-- `refactor/rules-extraction`
-- `docs/update-readme`
-
-### Commit Messages
-- `feat: Add contract validation for financial tab`
-- `fix: Resolve AI response parsing error`
-- `refactor: Optimize rule extraction algorithm`
-- `docs: Update API documentation`
-
----
-
-## 📋 Checklist Before Completing Task
-
-- [ ] Feature works as specified in `TASKS.md`
-- [ ] No console errors or warnings
-- [ ] Data persists correctly
-- [ ] UI is responsive and accessible
-- [ ] Edge cases handled
-- [ ] Loading states implemented
-- [ ] Error states handled
-- [ ] Task marked complete in `TASKS.md`
-- [ ] New tasks added to `TASKS.md` if discovered
-- [ ] Code follows project patterns
-
----
-
-## 🆘 Getting Help
-
-1. Review the PRD for business requirements
-2. Check existing code for similar patterns
-3. Look for TODO comments in codebase
-4. Review error messages carefully
-5. Check browser DevTools for issues
-6. Test with different data scenarios
-
----
-
-## 🎯 Priority Focus Areas
-
-1. **Immediate**: Fix any breaking bugs
-2. **High**: Complete PostgreSQL integration
-3. **High**: Implement full AI integration
-4. **Medium**: Add rule extraction engine
-5. **Medium**: Deploy to AWS
-6. **Low**: Add advanced analytics
-
----
-
-## 📚 Resources
-
-- [Shadcn/ui Documentation](https://ui.shadcn.com)
-- [React Hook Form](https://react-hook-form.com)
-- [Anthropic API Docs](https://docs.anthropic.com)
-- [AWS Textract](https://aws.amazon.com/textract)
-- [PostgreSQL with Node.js](https://node-postgres.com)
-
----
-
-**Remember: Always start by reading PLANNING.md, check TASKS.md for your work, and maintain task tracking throughout your session!**
+## Deployment Notes
+- Frontend serves from port 4000 (Vite)
+- Backend API on port 4003 (Express)
+- PostgreSQL database required
+- Redis for caching (optional in dev)
+- File uploads stored in `./uploads`

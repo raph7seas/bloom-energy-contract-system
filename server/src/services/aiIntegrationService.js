@@ -16,8 +16,13 @@ class AIIntegrationService {
       }
     };
 
+    // Use environment variable for model, fallback to stable version
+    this.anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+
     // Default to mock responses if no API keys are configured
     this.useMockResponses = !this.providers.anthropic.available && !this.providers.openai.available;
+
+    console.log(`🤖 AIIntegrationService initialized with Anthropic model: ${this.anthropicModel}`);
   }
 
   /**
@@ -60,7 +65,7 @@ class AIIntegrationService {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-sonnet-20240229',
+          model: this.anthropicModel,
           max_tokens: 4000,
           messages: [{
             role: 'user',

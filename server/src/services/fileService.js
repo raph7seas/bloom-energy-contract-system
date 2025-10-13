@@ -3,6 +3,7 @@ import path from 'path';
 import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import mammoth from 'mammoth';
+import pdfParse from 'pdf-parse';
 import pdf2pic from 'pdf2pic';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -78,81 +79,31 @@ class FileService {
 
   async extractTextFromPDF(buffer) {
     try {
-      // Save buffer to temporary file for processing
-      const tempDir = path.join(this.uploadDir, 'temp');
-      await fs.mkdir(tempDir, { recursive: true });
-      
-      const tempFilePath = path.join(tempDir, `pdf-${Date.now()}.pdf`);
-      await fs.writeFile(tempFilePath, buffer);
+      console.log('📄 PDF processing: Using pdf-parse for text extraction...');
 
-      try {
-        // Try using pdftotext (if available on system)
-        const { stdout } = await execAsync(`pdftotext "${tempFilePath}" -`);
-        
-        // Clean up temp file
-        await fs.unlink(tempFilePath);
-        
-        return {
-          text: stdout.trim(),
-          pages: (stdout.match(/\f/g) || []).length + 1,
-          metadata: { extractionMethod: 'pdftotext' },
-          message: 'Text extracted successfully using pdftotext'
-        };
-      } catch (pdfToTextError) {
-        // Fallback to pdf2pic for image conversion + OCR placeholder
-        try {
-          const convert = pdf2pic.fromPath(tempFilePath, {
-            density: 200,
-            saveFilename: "page",
-            savePath: tempDir,
-            format: "png",
-            width: 2048,
-            height: 2048
-          });
+      // Use pdf-parse to extract text from PDF
+      const pdfData = await pdfParse(buffer);
 
-          const results = await convert.bulk(-1);
-          
-          // Clean up temp file
-          await fs.unlink(tempFilePath);
-          
-          // Clean up generated images
-          for (const result of results) {
-            try {
-              await fs.unlink(result.path);
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-          }
+      console.log(`✅ PDF extracted: ${pdfData.numpages} pages, ${pdfData.text.length} characters`);
 
-          return {
-            text: '',
-            pages: results.length,
-            metadata: { 
-              extractionMethod: 'pdf2pic',
-              convertedPages: results.length 
-            },
-            message: `PDF converted to ${results.length} images. OCR text extraction would be needed for full text content.`
-          };
-        } catch (pdf2picError) {
-          // Clean up temp file
-          await fs.unlink(tempFilePath);
-          
-          return {
-            text: '',
-            pages: 0,
-            metadata: { extractionMethod: 'none' },
-            error: 'PDF processing failed',
-            message: 'PDF text extraction requires additional system dependencies (pdftotext or poppler-utils)'
-          };
-        }
-      }
-    } catch (error) {
       return {
-        text: '',
+        text: pdfData.text,
+        pages: pdfData.numpages,
+        metadata: {
+          extractionMethod: 'pdf-parse',
+          info: pdfData.info,
+          version: pdfData.version
+        },
+        message: 'PDF processed successfully with pdf-parse'
+      };
+    } catch (error) {
+      console.error('PDF extraction error:', error);
+      return {
+        text: '[PDF document - extraction failed: ' + error.message + ']',
         pages: 0,
-        metadata: {},
+        metadata: { extractionMethod: 'error' },
         error: error.message,
-        message: 'PDF processing failed - please try a different file format'
+        message: 'PDF processing failed - text extraction unavailable'
       };
     }
   }

@@ -2,169 +2,130 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
 
-export function AuthProvider({ children }) {
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState(null);
 
+  // API base URL
+  const API_BASE = '/api';
+
+  // Check authentication status on component mount
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
   const checkAuthStatus = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem('authToken');
       if (!token) {
         setLoading(false);
         return;
       }
 
-      const response = await fetch('/api/auth/me', {
+      // Check if token is valid by calling /api/auth/me
+      const response = await fetch(`${API_BASE}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
+        const userData = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
       } else {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        // Token is invalid, clear it
+        localStorage.removeItem('authToken');
+        setUser(null);
+        setIsAuthenticated(false);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('authToken');
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (username, password) => {
     try {
-      setError(null);
-      const response = await fetch('/api/auth/login', {
+      setLoading(true);
+      setError(null); // Clear any previous errors
+
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        setUser(data.user);
-        return { success: true };
-      } else {
-        setError(data.error || 'Login failed');
-        return { success: false, error: data.error };
-      }
-    } catch (error) {
-      const errorMessage = 'Network error. Please try again.';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const register = async (userData) => {
-    try {
-      setError(null);
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true };
-      } else {
-        setError(data.error || 'Registration failed');
-        return { success: false, error: data.error };
-      }
-    } catch (error) {
-      const errorMessage = 'Network error. Please try again.';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Logout request failed:', error);
-    } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setUser(null);
-    }
-  };
-
-  const refreshToken = async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (!refreshToken) {
-        return false;
-      }
-
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ email: username, password }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('accessToken', data.accessToken);
-        setUser(data.user);
-        return true;
+        
+        // Store the token - use the correct field from backend response
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+        } else if (data.accessToken) {
+          localStorage.setItem('authToken', data.accessToken);
+        }
+        
+        // Set user data and auth status - handle different response formats
+        const userData = data.user || data;
+        setUser(userData);
+        setIsAuthenticated(true);
+        setError(null); // Clear errors on successful login
+        
+        return { success: true };
       } else {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setUser(null);
-        return false;
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.message || 'Login failed';
+        setError(errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage
+        };
       }
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      return false;
+      console.error('Login error:', error);
+      const errorMessage = 'Network error. Please check your connection.';
+      setError(errorMessage);
+      return { 
+        success: false, 
+        error: errorMessage
+      };
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('authToken');
+    setUser(null);
+    setIsAuthenticated(false);
   };
 
   const value = {
     user,
+    isAuthenticated,
     loading,
     error,
     login,
-    register,
     logout,
-    refreshToken,
-    isAuthenticated: !!user,
+    checkAuthStatus,
   };
 
   return (
@@ -172,4 +133,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};

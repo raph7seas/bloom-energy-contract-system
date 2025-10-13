@@ -4,6 +4,10 @@ import AuditService from '../services/auditService.js';
 export const createAuditMiddleware = (entityType, options = {}) => {
   return async (req, res, next) => {
     try {
+      if (!req.prisma) {
+        return next();
+      }
+
       const auditService = new AuditService(req.prisma);
       
       // Store the audit service in the request for use in route handlers
@@ -161,6 +165,10 @@ function getChangeDescription(action, req) {
 export const captureOldValues = (entityType, getEntity) => {
   return async (req, res, next) => {
     try {
+      if (!req.prisma) {
+        return next();
+      }
+
       if (req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
         const entityId = req.params?.id || req.params?.contractId;
         
@@ -247,6 +255,10 @@ export const userAuditMiddleware = createAuditMiddleware('USER', {
 // Manual audit logging helper for complex operations
 export const logAuditEvent = async (req, entityType, entityId, action, options = {}) => {
   try {
+    if (!req.prisma) {
+      return;
+    }
+
     const auditService = new AuditService(req.prisma);
     
     await auditService.createAuditLog({

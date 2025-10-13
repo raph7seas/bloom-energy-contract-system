@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 
 class NotificationService extends EventEmitter {
   constructor() {
@@ -89,8 +90,6 @@ class NotificationService extends EventEmitter {
         return next(new Error('Authentication required'));
       }
       
-      // Import JWT service
-      const jwt = require('jsonwebtoken');
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       socket.userId = decoded.id;

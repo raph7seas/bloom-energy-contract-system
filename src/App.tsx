@@ -1,7 +1,8 @@
 import React from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { AuthPage } from './components/auth/AuthPage';
-import BloomContractSystem from './components/BloomContractSystem';
+import { BloomContractSystem } from './components/BloomContractSystem';
+import { ProcessingToast } from './components/ui/ProcessingToast';
 
 export function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -31,5 +32,10 @@ export function App() {
   }
 
   // Show main application if authenticated
-  return <BloomContractSystem />;
+  return (
+    <>
+      <BloomContractSystem />
+      <ProcessingToast />
+    </>
+  );
 }

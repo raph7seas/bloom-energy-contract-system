@@ -3,21 +3,23 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { Search, Filter, Download, Eye, Edit, Trash2, Calendar, Building, MapPin } from 'lucide-react';
-import { Contract } from '../../types';
+import { Search, Filter, Download, Eye, Edit, Trash2, Calendar, Building, MapPin, Brain, FileText } from 'lucide-react';
+import { Contract, ContractFormData } from '../../types';
 import { contractService } from '../../services';
 import { formatCurrency, formatCapacity } from '../../utils/calculations';
 import { PDFService } from '../../services/pdfService';
 
 interface ContractLibraryProps {
   onNavigate: (view: string, contract?: Contract) => void;
+  onCreateFromAi?: (aiData: Partial<ContractFormData>, sourceDoc: { id: string; name: string; confidence?: number }) => void;
 }
 
-export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) => {
+export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate, onCreateFromAi }) => {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterSource, setFilterSource] = useState('all'); // 'all', 'ai', 'manual'
   const [exportingContractId, setExportingContractId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,8 +47,12 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
     
     const matchesStatus = filterStatus === 'all' || 
       contract.status.toLowerCase() === filterStatus.toLowerCase();
+
+    const matchesSource = filterSource === 'all' ||
+      (filterSource === 'ai' && contract.aiMetadata?.isAiExtracted) ||
+      (filterSource === 'manual' && !contract.aiMetadata?.isAiExtracted);
     
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesSource;
   });
 
   const handleDeleteContract = async (contractId: string) => {
@@ -70,6 +76,53 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
       alert('Failed to export contract. Please try again.');
     } finally {
       setExportingContractId(null);
+    }
+  };
+
+  const handleViewContractDetails = (contract: Contract) => {
+    // Navigate to contract details view with contract wrapped in options object
+    onNavigate('contract-details', { contract });
+  };
+
+  const handleEditContract = (contract: Contract) => {
+    // Convert contract back to form data and navigate to edit mode
+    const formData: Partial<ContractFormData> = {
+      customerName: contract.client,
+      siteLocation: contract.site,
+      orderDate: contract.uploadDate,
+      effectiveDate: contract.effectiveDate,
+      solutionType: contract.type,
+      ratedCapacity: contract.capacity,
+      contractTerm: contract.term,
+      baseRate: contract.parameters.financial.baseRate,
+      annualEscalation: contract.parameters.financial.escalation,
+      microgridAdder: contract.parameters.financial.microgridAdder,
+      thermalCycleFee: contract.parameters.financial.thermalCycleFee,
+      electricalBudget: contract.parameters.financial.electricalBudget,
+      commissioningAllowance: contract.parameters.financial.commissioningAllowance,
+      outputWarrantyPercent: contract.parameters.operating.outputWarranty,
+      efficiencyWarrantyPercent: contract.parameters.operating.efficiency,
+      minDemandKW: contract.parameters.operating.demandRange.min,
+      maxDemandKW: contract.parameters.operating.demandRange.max,
+      guaranteedCriticalOutput: contract.parameters.operating.criticalOutput,
+      gridParallelVoltage: contract.parameters.technical.voltage,
+      numberOfServers: contract.parameters.technical.servers,
+      selectedComponents: contract.parameters.technical.components,
+      includeRECs: !!contract.parameters.technical.recType,
+      recType: contract.parameters.technical.recType || 'CT-Class-I',
+      specialRequirements: contract.notes || ''
+    };
+
+    if (onCreateFromAi && contract.aiMetadata?.isAiExtracted) {
+      // Use AI creation flow for AI-extracted contracts
+      onCreateFromAi(formData, {
+        id: contract.aiMetadata.sourceDocument.id,
+        name: contract.aiMetadata.sourceDocument.name,
+        confidence: contract.aiMetadata.overallConfidence
+      });
+    } else {
+      // Use regular creation flow for manual contracts
+      onNavigate('create');
     }
   };
 
@@ -138,6 +191,15 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
                   <option value="expired">Expired</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
+                <select
+                  value={filterSource}
+                  onChange={(e) => setFilterSource(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="ai">AI Extracted</option>
+                  <option value="manual">Manual Entry</option>
+                </select>
                 <Button variant="outline" size="sm">
                   <Filter className="h-4 w-4 mr-2" />
                   More Filters
@@ -181,14 +243,29 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
               <Card key={contract.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start mb-2">
-                    <Badge className={getStatusColor(contract.status)}>
-                      {contract.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(contract.status)}>
+                        {contract.status}
+                      </Badge>
+                      {contract.aiMetadata?.isAiExtracted && (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
+                          <Brain className="h-3 w-3 mr-1" />
+                          AI Extracted
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500">
                       {contract.id}
                     </div>
                   </div>
-                  <CardTitle className="text-lg">{contract.name}</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {contract.name}
+                    {contract.aiMetadata?.isAiExtracted && (
+                      <div className="flex items-center text-xs text-blue-600">
+                        <span>{Math.round((contract.aiMetadata.overallConfidence || 0) * 100)}%</span>
+                      </div>
+                    )}
+                  </CardTitle>
                 </CardHeader>
                 
                 <CardContent className="pt-0">
@@ -230,6 +307,14 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
                       Created: {contract.uploadDate} | Effective: {contract.effectiveDate}
                     </div>
 
+                    {/* AI Source Info */}
+                    {contract.aiMetadata?.isAiExtracted && (
+                      <div className="flex items-center text-xs text-blue-600">
+                        <FileText className="h-3 w-3 mr-1" />
+                        Source: {contract.aiMetadata.sourceDocument.name}
+                      </div>
+                    )}
+
                     {/* Tags */}
                     {contract.tags && contract.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -249,10 +334,22 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
                     {/* Action Buttons */}
                     <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleViewContractDetails(contract)}
+                          title="View Rules"
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleEditContract(contract)}
+                          title="Edit Contract"
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button 
@@ -260,6 +357,7 @@ export const ContractLibrary: React.FC<ContractLibraryProps> = ({ onNavigate }) 
                           variant="ghost" 
                           className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
                           onClick={() => handleDeleteContract(contract.id)}
+                          title="Delete Contract"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

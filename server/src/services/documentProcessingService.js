@@ -4,11 +4,27 @@ import { fileTypeFromBuffer } from 'file-type';
 import crypto from 'crypto';
 import sharp from 'sharp';
 import mammoth from 'mammoth';
+import pdfParse from 'pdf-parse';
 import pdf2pic from 'pdf2pic';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import localTextractService from './localTextractService.js';
-import notificationService from './notificationService.js';
+// Import services with error handling
+let textractManager = null;
+let notificationService = null;
+
+try {
+  const textractModule = await import('./textractManager.js');
+  textractManager = textractModule.default;
+} catch (error) {
+  console.warn('⚠️ TextractManager not available:', error.message);
+}
+
+try {
+  const notifModule = await import('./notificationService.js');
+  notificationService = notifModule.default;
+} catch (error) {
+  console.warn('⚠️ NotificationService not available:', error.message);
+}
 
 const execAsync = promisify(exec);
 
@@ -142,15 +158,17 @@ class DocumentProcessingService {
     
     await Promise.all(chunkPromises);
 
-    // Emit notification for upload started
-    notificationService.emit('document:upload:started', {
-      documentId,
-      documentTitle: fileInfo.title || originalName,
-      contractId,
-      fileSize,
-      totalChunks,
-      userId: fileInfo.uploadedBy
-    });
+    // Emit notification for upload started (if service available)
+    if (notificationService) {
+      notificationService.emit('document:upload:started', {
+        documentId,
+        documentTitle: fileInfo.title || originalName,
+        contractId,
+        fileSize,
+        totalChunks,
+        userId: fileInfo.uploadedBy
+      });
+    }
     
     return {
       documentId,
@@ -198,14 +216,16 @@ class DocumentProcessingService {
       }
     });
 
-    // Emit chunk upload notification
-    notificationService.emit('document:chunk:uploaded', {
-      documentId,
-      chunkNumber: parseInt(chunkNumber),
-      chunksUploaded: document.chunksUploaded,
-      totalChunks: document.totalChunks,
-      userId: document.uploadedBy
-    });
+    // Emit chunk upload notification (if service available)
+    if (notificationService) {
+      notificationService.emit('document:chunk:uploaded', {
+        documentId,
+        chunkNumber: parseInt(chunkNumber),
+        chunksUploaded: document.chunksUploaded,
+        totalChunks: document.totalChunks,
+        userId: document.uploadedBy
+      });
+    }
 
     // Check if all chunks are uploaded
     if (document.chunksUploaded >= document.totalChunks) {
@@ -268,13 +288,15 @@ class DocumentProcessingService {
       // Clean up chunk files
       await this.cleanupChunks(document.chunks);
 
-      // Emit consolidation notification
-      notificationService.emit('document:consolidated', {
-        documentId,
-        documentTitle: document.title,
-        filePath: finalFilePath,
-        userId: document.uploadedBy
-      });
+      // Emit consolidation notification (if service available)
+      if (notificationService) {
+        notificationService.emit('document:consolidated', {
+          documentId,
+          documentTitle: document.title,
+          filePath: finalFilePath,
+          userId: document.uploadedBy
+        });
+      }
 
       // Queue text extraction job
       await this.queueProcessingJob(documentId, 'TEXT_EXTRACTION', prisma);
@@ -398,13 +420,15 @@ class DocumentProcessingService {
       }
     });
 
-    // Emit processing started notification
-    notificationService.emit('document:processing:started', {
-      documentId,
-      documentTitle: document.title,
-      processingType: 'text_extraction',
-      userId: document.uploadedBy
-    });
+    // Emit processing started notification (if service available)
+    if (notificationService) {
+      notificationService.emit('document:processing:started', {
+        documentId,
+        documentTitle: document.title,
+        processingType: 'text_extraction',
+        userId: document.uploadedBy
+      });
+    }
 
     const buffer = await fs.readFile(document.filePath);
     let extractedContent;
@@ -444,15 +468,17 @@ class DocumentProcessingService {
         }
       });
 
-      // Emit text extraction completion notification
-      notificationService.emit('document:text:extracted', {
-        documentId,
-        documentTitle: document.title,
-        pageCount: extractedContent.pages || 1,
-        wordCount: extractedContent.wordCount || this.countWords(extractedContent.text || ''),
-        extractionMethod: extractedContent.extractionMethod || 'unknown',
-        userId: document.uploadedBy
-      });
+      // Emit text extraction completion notification (if service available)
+      if (notificationService) {
+        notificationService.emit('document:text:extracted', {
+          documentId,
+          documentTitle: document.title,
+          pageCount: extractedContent.pages || 1,
+          wordCount: extractedContent.wordCount || this.countWords(extractedContent.text || ''),
+          extractionMethod: extractedContent.extractionMethod || 'unknown',
+          userId: document.uploadedBy
+        });
+      }
 
       console.log(`✅ Text extraction completed for document ${documentId}`);
       return { success: true, pageCount: extractedContent.pages || 1 };
@@ -467,37 +493,64 @@ class DocumentProcessingService {
   async extractTextFromPDFWithPages(buffer, document, prisma) {
     const tempDir = path.join(this.tempDir, `pdf-${document.id}`);
     await fs.mkdir(tempDir, { recursive: true });
-    
+
     const tempFilePath = path.join(tempDir, `${document.id}.pdf`);
     await fs.writeFile(tempFilePath, buffer);
 
     try {
-      // Try pdftotext first for better text extraction
+      // Try pdf-parse first (pure JavaScript, always available)
       try {
-        const { stdout } = await execAsync(`pdftotext "${tempFilePath}" -`);
-        const pages = stdout.split('\f'); // Form feed character separates pages
-        
-        // Create page records
-        for (let i = 0; i < pages.length; i++) {
-          if (pages[i].trim()) {
-            await this.createPageRecord(document.id, i + 1, {
-              text: pages[i].trim(),
-              extractionMethod: 'pdftotext',
-              wordCount: this.countWords(pages[i])
-            }, prisma);
-          }
-        }
+        console.log('📄 Using pdf-parse for text extraction...');
+        const pdfData = await pdfParse(buffer);
 
-        await fs.rm(tempDir, { recursive: true });
+        // Create a single page record with all text (pdf-parse doesn't separate pages easily)
+        await this.createPageRecord(document.id, 1, {
+          text: pdfData.text.trim(),
+          extractionMethod: 'pdf-parse',
+          wordCount: this.countWords(pdfData.text)
+        }, prisma);
+
+        await fs.rm(tempDir, { recursive: true }).catch(() => {});
+
+        console.log(`✅ PDF text extracted successfully using pdf-parse (${pdfData.numpages} pages, ${this.countWords(pdfData.text)} words)`);
+
         return {
-          text: stdout.trim(),
-          pages: pages.length,
-          extractionMethod: 'pdftotext'
+          text: pdfData.text.trim(),
+          pages: pdfData.numpages,
+          wordCount: this.countWords(pdfData.text),
+          extractionMethod: 'pdf-parse'
         };
+      } catch (pdfParseError) {
+        console.warn('⚠️ pdf-parse failed, trying pdftotext command...', pdfParseError.message);
+
+        // Try pdftotext command-line tool as fallback
+        try {
+          const { stdout } = await execAsync(`pdftotext "${tempFilePath}" -`);
+          const pages = stdout.split('\f'); // Form feed character separates pages
+
+          // Create page records
+          for (let i = 0; i < pages.length; i++) {
+            if (pages[i].trim()) {
+              await this.createPageRecord(document.id, i + 1, {
+                text: pages[i].trim(),
+                extractionMethod: 'pdftotext',
+                wordCount: this.countWords(pages[i])
+              }, prisma);
+            }
+          }
+
+          await fs.rm(tempDir, { recursive: true });
+          return {
+            text: stdout.trim(),
+            pages: pages.length,
+            extractionMethod: 'pdftotext'
+          };
 
       } catch (pdfToTextError) {
+        console.warn('⚠️ pdftotext command failed, trying OCR fallback...', pdfToTextError.message);
         // Fallback to pdf2pic + OCR
         return await this.extractPDFWithOCR(tempFilePath, document, prisma);
+      }
       }
     } finally {
       try {
@@ -610,14 +663,28 @@ class DocumentProcessingService {
   // Extract text from images using OCR
   async extractTextFromImage(buffer) {
     try {
-      const textractResult = await localTextractService.analyzeDocument(buffer, {
+      // Check if textractManager is available
+      if (!textractManager) {
+        console.warn('⚠️ TextractManager not available, returning placeholder text');
+        return {
+          text: '[OCR service not available - image content not extracted]',
+          confidence: 0,
+          processingTime: 0,
+          wordCount: 0
+        };
+      }
+
+      const textractResult = await textractManager.analyzeDocument(buffer, {
         documentType: 'image',
-        features: ['TEXT'],
+        features: ['TEXT', 'TABLES', 'FORMS'],
         blocks: true
       });
 
       if (textractResult.JobStatus === 'SUCCEEDED') {
-        const extractedText = localTextractService.extractTextFromBlocks(textractResult.Blocks);
+        // Extract text using the standardized method
+        const extractedText = textractResult.Text || 
+          textractResult.Blocks?.filter(block => block.BlockType === 'LINE')
+            .map(block => block.Text).join('\n') || '';
         
         const confidenceScores = textractResult.Blocks
           .filter(block => block.Confidence)

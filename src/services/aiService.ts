@@ -8,7 +8,7 @@ import { loadFromLocalStorage, saveToLocalStorage, STORAGE_KEYS } from '../utils
 
 class AIService {
   private readonly apiUrl = '/api/ai/chat';
-  private readonly model = 'claude-sonnet-4-20250514';
+  private readonly model = 'claude-3-5-sonnet-20241022'; // Claude 3.5 Sonnet - stable production model
   private readonly maxTokens = 1000;
 
   // Helper method to get authentication headers

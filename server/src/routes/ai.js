@@ -295,27 +295,66 @@ router.post('/optimize/stream', async (req, res) => {
   }
 });
 
-// Contract analysis endpoint
+// Contract analysis endpoint - supports both structured contract data and raw text
 router.post('/analyze', cacheControlMiddleware, analysisCacheMiddleware, async (req, res) => {
   try {
-    const { 
-      contractData, 
-      modelId, 
-      provider, 
-      preferences 
+    const {
+      contractData,
+      text,
+      analysisType,
+      modelId,
+      provider,
+      preferences
     } = req.body;
-    
-    if (!contractData) {
-      return res.status(400).json({ 
-        error: 'Contract data is required' 
+
+    // Support both text-based analysis (from document uploads) and structured data analysis
+    if (!contractData && !text) {
+      return res.status(400).json({
+        error: 'Contract data or text is required'
       });
     }
 
-    const analysis = await aiManager.analyze(contractData, {
-      modelId,
-      provider,
-      preferences: preferences || {}
-    });
+    let analysis;
+
+    // If text is provided, use it for analysis (document upload use case)
+    if (text) {
+      // For text-based analysis, we'll use the chat endpoint with a specialized prompt
+      const prompt = `Analyze the following contract text and extract key information including:
+- Contract type
+- Parties involved
+- Effective date
+- Key terms and conditions
+- Financial information
+- Performance metrics
+- Risk factors
+
+Contract Text:
+${text}
+
+Please provide a structured analysis in JSON format.`;
+
+      const chatResponse = await aiManager.chat(prompt, {
+        context: { analysisType: analysisType || 'contract_extraction' },
+        modelId,
+        provider,
+        preferences: preferences || {}
+      });
+
+      // Parse the AI response and structure it
+      analysis = {
+        success: true,
+        analysis: chatResponse.response,
+        extractedFromText: true,
+        timestamp: new Date().toISOString()
+      };
+    } else {
+      // Use structured contract data analysis
+      analysis = await aiManager.analyze(contractData, {
+        modelId,
+        provider,
+        preferences: preferences || {}
+      });
+    }
 
     res.json({
       success: true,
@@ -324,9 +363,9 @@ router.post('/analyze', cacheControlMiddleware, analysisCacheMiddleware, async (
     });
   } catch (error) {
     console.error('Analysis endpoint error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to analyze contract',
-      details: error.message 
+      details: error.message
     });
   }
 });

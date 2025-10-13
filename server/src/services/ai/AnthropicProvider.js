@@ -9,6 +9,10 @@ export class AnthropicProvider extends AIProvider {
   constructor() {
     super('anthropic');
     this.anthropic = null;
+    // Use environment variable for default model, fallback to stable version
+    this.defaultModel = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+    this.defaultFastModel = 'claude-3-5-haiku-20241022'; // Fast model for suggestions
+    console.log(`🤖 AnthropicProvider using default model: ${this.defaultModel}`);
     this._registerAllModels();
   }
 
@@ -36,10 +40,10 @@ export class AnthropicProvider extends AIProvider {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = this.defaultModel,
       context = {},
       conversationHistory = [],
-      maxTokens = 1500
+      maxTokens = 8192 // Set to 8192 (Haiku's max) - Sonnet 4.5 supports much higher
     } = options;
 
     try {
@@ -86,9 +90,9 @@ export class AnthropicProvider extends AIProvider {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = this.defaultModel,
       context = {},
-      maxTokens = 1500
+      maxTokens = 8192 // Set to 8192 (Haiku's max) - Sonnet 4.5 supports much higher
     } = options;
 
     try {
@@ -127,8 +131,8 @@ export class AnthropicProvider extends AIProvider {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20241022',
-      maxTokens = 1500
+      model = this.defaultModel,
+      maxTokens = 8192 // Set to 8192 (Haiku's max) - Sonnet 4.5 supports much higher
     } = options;
 
     try {
@@ -167,7 +171,7 @@ export class AnthropicProvider extends AIProvider {
     }
 
     const {
-      model = 'claude-3-5-haiku-20241022', // Use faster model for suggestions
+      model = this.defaultFastModel, // Use faster model for suggestions
       maxTokens = 1000
     } = options;
 
@@ -201,7 +205,7 @@ export class AnthropicProvider extends AIProvider {
     }
   }
 
-  estimateTokens(text, model = 'claude-3-5-sonnet-20241022') {
+  estimateTokens(text, model = null) {
     // Rough estimation: ~4 characters per token for Claude
     // This is an approximation - actual tokenization may vary
     return Math.ceil(text.length / 4);

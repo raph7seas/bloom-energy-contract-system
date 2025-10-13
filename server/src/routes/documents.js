@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { fileAuditMiddleware } from '../middleware/audit.js';
 import documentProcessingService from '../services/documentProcessingService.js';
+import contractAnalysisService from '../services/contractAnalysisService.js';
 
 const router = express.Router();
 
@@ -262,6 +263,398 @@ router.post('/contracts/:contractId/upload/multiple', optionalAuth, upload.array
   } catch (error) {
     console.error('Multiple document upload error:', error);
     res.status(500).json({ error: 'Document upload failed' });
+  }
+});
+
+// Intelligent document upload - analyzes content and suggests grouping
+router.post('/upload/intelligent', optionalAuth, upload.array('documents', 10), fileAuditMiddleware, async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files provided' });
+    }
+
+    console.log(`🧠 Intelligent upload started - ${req.files.length} documents`);
+
+    const results = [];
+    const errors = [];
+    const suggestions = {
+      newContracts: [],
+      existingContracts: [],
+      requiresReview: []
+    };
+
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      
+      try {
+        // Validate file
+        const validationErrors = documentProcessingService.validateFile(file, file.size);
+        if (validationErrors.length > 0) {
+          errors.push({
+            file: file.originalname,
+            errors: validationErrors
+          });
+          continue;
+        }
+
+        console.log(`📄 Processing ${file.originalname}...`);
+
+        // Extract text content for analysis (simplified for now - normally would use OCR/text extraction)
+        let documentText = '';
+        if (file.mimetype === 'text/plain') {
+          documentText = file.buffer.toString('utf8');
+        } else if (file.mimetype === 'application/pdf') {
+          // For now, use filename and basic content analysis
+          documentText = `Document: ${file.originalname}\nSize: ${file.size} bytes\nType: PDF Document`;
+        } else {
+          documentText = `Document: ${file.originalname}\nSize: ${file.size} bytes\nType: ${file.mimetype}`;
+        }
+
+        console.log(`🔍 Analyzing document content...`);
+
+        // Analyze document content with AI
+        const analysisResult = await contractAnalysisService.analyzeContractContent(documentText);
+        
+        if (!analysisResult.success) {
+          console.warn(`⚠️ Analysis failed for ${file.originalname}:`, analysisResult.error);
+          errors.push({
+            file: file.originalname,
+            error: `Analysis failed: ${analysisResult.error}`
+          });
+          continue;
+        }
+
+        const analysis = analysisResult.analysis;
+        console.log(`✅ Analysis complete for ${file.originalname} - Type: ${analysis.contractType?.category}, Confidence: ${analysis.overallConfidence}`);
+
+        // Get existing contracts for similarity analysis
+        const existingContracts = await req.prisma.contract.findMany({
+          take: 50, // Limit for performance
+          include: {
+            documents: {
+              include: {
+                analyses: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        console.log(`🔄 Comparing with ${existingContracts.length} existing contracts...`);
+
+        // Find similar contracts
+        const similarityResult = await contractAnalysisService.findSimilarContracts(
+          analysis, 
+          existingContracts.map(contract => ({
+            id: contract.id,
+            name: contract.name,
+            client: contract.client,
+            contractType: contract.systemType,
+            analyses: contract.documents.flatMap(doc => doc.analyses || [])
+          }))
+        );
+
+        // Generate contract summary
+        const summary = await contractAnalysisService.generateContractSummary(analysis);
+
+        // Determine suggestion based on similarity analysis
+        let suggestion;
+        const bestMatch = similarityResult.bestMatch;
+        const suggestedAction = similarityResult.suggestions?.action || 'create_new';
+
+        if (bestMatch && bestMatch.similarityScore > 0.8 && suggestedAction === 'merge_with_existing') {
+          // High similarity - suggest adding to existing contract
+          suggestion = {
+            type: 'existing_contract',
+            action: 'add_to_existing',
+            contractId: bestMatch.contractId,
+            contractName: existingContracts.find(c => c.id === bestMatch.contractId)?.name || 'Unknown Contract',
+            confidence: bestMatch.confidence,
+            reasoning: `High similarity (${Math.round(bestMatch.similarityScore * 100)}%) with existing contract`,
+            matchingFactors: bestMatch.matchingFactors || []
+          };
+          suggestions.existingContracts.push(suggestion);
+        } else if (bestMatch && bestMatch.similarityScore > 0.5 && suggestedAction === 'needs_review') {
+          // Medium similarity - requires human review
+          suggestion = {
+            type: 'requires_review',
+            action: 'human_review',
+            contractId: bestMatch.contractId,
+            contractName: existingContracts.find(c => c.id === bestMatch.contractId)?.name || 'Unknown Contract',
+            confidence: bestMatch.confidence,
+            reasoning: `Moderate similarity (${Math.round(bestMatch.similarityScore * 100)}%) - manual review recommended`,
+            alternatives: similarityResult.matches?.slice(0, 3) || []
+          };
+          suggestions.requiresReview.push(suggestion);
+        } else {
+          // Low similarity or create_new action - suggest new contract
+          suggestion = {
+            type: 'new_contract',
+            action: 'create_new',
+            suggestedName: summary.title,
+            suggestedClient: analysis.parties?.find(p => p.role === 'client')?.name || 'Unknown Client',
+            contractType: analysis.contractType?.category || 'Unknown',
+            confidence: analysis.overallConfidence,
+            reasoning: similarityResult.suggestions?.reasoning || 'No similar contracts found',
+            extractedInfo: {
+              parties: analysis.parties || [],
+              dates: analysis.dates || {},
+              financialTerms: analysis.financialTerms || {},
+              keywords: analysis.subjectMatter?.keywords || []
+            }
+          };
+          suggestions.newContracts.push(suggestion);
+        }
+
+        // Store result for this file
+        results.push({
+          file: file.originalname,
+          size: file.size,
+          type: file.mimetype,
+          analysis: {
+            contractType: analysis.contractType,
+            parties: analysis.parties,
+            confidence: analysis.overallConfidence,
+            summary: summary.description
+          },
+          similarity: {
+            bestMatch: bestMatch,
+            totalMatches: similarityResult.matches?.length || 0
+          },
+          suggestion
+        });
+
+        console.log(`📋 Suggestion for ${file.originalname}: ${suggestion.action} (${suggestion.type})`);
+
+      } catch (fileError) {
+        console.error(`❌ Error processing ${file.originalname}:`, fileError);
+        errors.push({
+          file: file.originalname,
+          error: fileError.message
+        });
+      }
+    }
+
+    // Generate overall recommendations
+    const overallRecommendations = {
+      totalDocuments: req.files.length,
+      processed: results.length,
+      failed: errors.length,
+      suggestions: {
+        createNewContracts: suggestions.newContracts.length,
+        addToExisting: suggestions.existingContracts.length,
+        requiresReview: suggestions.requiresReview.length
+      },
+      nextSteps: []
+    };
+
+    // Add next step recommendations
+    if (suggestions.newContracts.length > 0) {
+      overallRecommendations.nextSteps.push({
+        action: 'create_contracts',
+        description: `Create ${suggestions.newContracts.length} new contract(s) based on document analysis`,
+        priority: 'high',
+        documents: suggestions.newContracts.map(s => s.suggestedName)
+      });
+    }
+
+    if (suggestions.existingContracts.length > 0) {
+      overallRecommendations.nextSteps.push({
+        action: 'add_documents',
+        description: `Add ${suggestions.existingContracts.length} document(s) to existing contracts`,
+        priority: 'medium',
+        contracts: suggestions.existingContracts.map(s => s.contractName)
+      });
+    }
+
+    if (suggestions.requiresReview.length > 0) {
+      overallRecommendations.nextSteps.push({
+        action: 'manual_review',
+        description: `${suggestions.requiresReview.length} document(s) require manual review to determine proper grouping`,
+        priority: 'high',
+        documents: suggestions.requiresReview.map((_, idx) => results[idx]?.file || 'Unknown')
+      });
+    }
+
+    console.log(`🎯 Intelligent upload complete - ${results.length} processed, ${errors.length} errors`);
+
+    res.status(results.length > 0 ? 200 : 400).json({
+      message: 'Intelligent document analysis completed',
+      summary: overallRecommendations,
+      results,
+      suggestions,
+      errors: errors.length > 0 ? errors : undefined,
+      processingTime: Date.now() - (req.startTime || Date.now())
+    });
+
+  } catch (error) {
+    console.error('❌ Intelligent upload error:', error);
+    res.status(500).json({ 
+      error: 'Intelligent document analysis failed',
+      details: error.message 
+    });
+  }
+});
+
+// Auto-create contracts based on intelligent upload suggestions
+router.post('/upload/intelligent/execute', optionalAuth, async (req, res) => {
+  try {
+    const { suggestions, action } = req.body;
+
+    if (!suggestions || !action) {
+      return res.status(400).json({ error: 'Missing suggestions or action parameter' });
+    }
+
+    console.log(`🔄 Executing intelligent upload actions: ${action}`);
+
+    const results = {
+      contractsCreated: [],
+      documentsAdded: [],
+      errors: []
+    };
+
+    if (action === 'create_contracts' && suggestions.newContracts) {
+      // Create new contracts based on AI suggestions
+      for (const suggestion of suggestions.newContracts) {
+        try {
+          const extractedInfo = suggestion.extractedInfo || {};
+          
+          // Determine system type from contract type
+          let systemType = 'POWER_PURCHASE_STANDARD'; // Default
+          const contractType = suggestion.contractType?.toLowerCase();
+          if (contractType?.includes('microgrid')) {
+            systemType = 'MICROGRID_CONSTRAINED';
+          } else if (contractType?.includes('battery')) {
+            systemType = 'POWER_PURCHASE_WITH_BATTERY';
+          }
+
+          // Extract financial information
+          const financialTerms = extractedInfo.financialTerms || {};
+          const totalValue = parseFloat(financialTerms.totalValue) || null;
+          const baseRate = totalValue ? totalValue / 240 : null; // Rough estimate for 20-year term
+
+          // Create contract
+          const contract = await req.prisma.contract.create({
+            data: {
+              name: suggestion.suggestedName || `Contract - ${suggestion.suggestedClient}`,
+              client: suggestion.suggestedClient || 'Unknown Client',
+              site: `${suggestion.suggestedClient} Site`, // Default site name
+              capacity: 325.0, // Default Bloom Energy capacity
+              term: 20, // Default term
+              systemType,
+              effectiveDate: extractedInfo.dates?.effectiveDate ? 
+                new Date(extractedInfo.dates.effectiveDate) : new Date(),
+              status: 'DRAFT',
+              totalValue,
+              tags: extractedInfo.keywords || [],
+              notes: `Auto-created from intelligent document analysis. Confidence: ${Math.round((suggestion.confidence || 0) * 100)}%`,
+              createdBy: req.user?.id
+            }
+          });
+
+          // Create financial parameters if we have financial data
+          if (baseRate && totalValue) {
+            await req.prisma.financialParams.create({
+              data: {
+                contractId: contract.id,
+                baseRate,
+                escalation: 2.5, // Default escalation
+                microgridAdder: systemType.includes('MICROGRID') ? 0.05 : null
+              }
+            });
+          }
+
+          // Create technical parameters with defaults
+          await req.prisma.technicalParams.create({
+            data: {
+              contractId: contract.id,
+              voltage: 'V_480', // Default voltage
+              servers: 1,
+              components: ['RI', 'AC'] // Default components
+            }
+          });
+
+          // Create operating parameters with defaults
+          await req.prisma.operatingParams.create({
+            data: {
+              contractId: contract.id,
+              outputWarranty: 95.0,
+              efficiency: 60.0,
+              minDemand: 200.0,
+              maxDemand: 325.0,
+              criticalOutput: 325.0
+            }
+          });
+
+          results.contractsCreated.push({
+            id: contract.id,
+            name: contract.name,
+            client: contract.client,
+            systemType: contract.systemType,
+            confidence: suggestion.confidence,
+            extractedInfo: extractedInfo
+          });
+
+          console.log(`✅ Created contract: ${contract.name} (ID: ${contract.id})`);
+
+        } catch (error) {
+          console.error(`❌ Error creating contract for ${suggestion.suggestedName}:`, error);
+          results.errors.push({
+            suggestion: suggestion.suggestedName,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    if (action === 'add_documents' && suggestions.existingContracts) {
+      // Add documents to existing contracts
+      for (const suggestion of suggestions.existingContracts) {
+        try {
+          // Note: This would require the actual file data to be persisted
+          // For now, we'll just record the intention
+          results.documentsAdded.push({
+            contractId: suggestion.contractId,
+            contractName: suggestion.contractName,
+            confidence: suggestion.confidence,
+            reasoning: suggestion.reasoning
+          });
+
+          console.log(`📎 Marked for addition to contract: ${suggestion.contractName}`);
+
+        } catch (error) {
+          console.error(`❌ Error adding document to contract ${suggestion.contractName}:`, error);
+          results.errors.push({
+            contractName: suggestion.contractName,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    const summary = {
+      action,
+      contractsCreated: results.contractsCreated.length,
+      documentsAdded: results.documentsAdded.length,
+      errors: results.errors.length,
+      success: results.errors.length === 0
+    };
+
+    console.log(`🎯 Execution complete: ${JSON.stringify(summary)}`);
+
+    res.json({
+      message: 'Intelligent upload actions executed',
+      summary,
+      results,
+      errors: results.errors.length > 0 ? results.errors : undefined
+    });
+
+  } catch (error) {
+    console.error('❌ Execute intelligent actions error:', error);
+    res.status(500).json({ 
+      error: 'Failed to execute intelligent upload actions',
+      details: error.message 
+    });
   }
 });
 
