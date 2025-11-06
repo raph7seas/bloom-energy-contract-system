@@ -593,6 +593,135 @@ class AIService {
   }
 
   /**
+   * Extract contract data from PDF using Anthropic API with vision
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @param {string} filename - Original filename
+   * @param {Object} options - Extraction options
+   * @returns {Object} Extraction result
+   */
+  async extractFromPDF(pdfBuffer, filename, options = {}) {
+    if (!this.isConfigured()) {
+      throw new Error('Anthropic API key not configured');
+    }
+
+    const startTime = Date.now();
+    console.log(`\n🤖 Extracting contract data from PDF: ${filename}`);
+    console.log(`📄 File size: ${(pdfBuffer.length / 1024).toFixed(2)} KB`);
+    console.log(`🔧 Using model: ${this.model}`);
+
+    try {
+      // Convert PDF buffer to base64
+      const base64PDF = pdfBuffer.toString('base64');
+
+      // Build extraction prompt
+      const extractionPrompt = this._buildExtractionPrompt(options);
+
+      // Call Anthropic API with PDF document
+      const response = await this.getClient().messages.create({
+        model: this.model,
+        max_tokens: options.maxTokens || this.maxTokens,
+        temperature: options.temperature || 0.3,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64PDF
+              }
+            },
+            {
+              type: 'text',
+              text: extractionPrompt
+            }
+          ]
+        }]
+      });
+
+      const processingTime = Date.now() - startTime;
+      const extractedText = response.content[0].text;
+
+      console.log(`✅ Extraction complete in ${(processingTime / 1000).toFixed(2)}s`);
+      console.log(`📊 Token usage: ${response.usage.input_tokens} input, ${response.usage.output_tokens} output`);
+
+      return {
+        success: true,
+        extractedText,
+        usage: {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          totalTokens: response.usage.input_tokens + response.usage.output_tokens
+        },
+        processingTime,
+        apiType: 'anthropic-direct',
+        model: this.model
+      };
+
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      console.error(`❌ PDF extraction failed after ${(processingTime / 1000).toFixed(2)}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Build extraction prompt for PDF analysis
+   */
+  _buildExtractionPrompt(options = {}) {
+    const documentType = options.documentType || 'contract';
+
+    return `You are analyzing a Bloom Energy ${documentType} document. Extract the following information in JSON format:
+
+{
+  "extractedData": {
+    "contractTerm": "number of years or NOT SPECIFIED",
+    "baseRate": "rate per kWh in dollars or NOT SPECIFIED",
+    "escalationRate": "annual percentage or NOT SPECIFIED",
+    "systemCapacity": "capacity in kW or NOT SPECIFIED",
+    "efficiencyWarranty": "efficiency percentage or NOT SPECIFIED",
+    "availabilityGuarantee": "availability percentage or NOT SPECIFIED",
+    "customerName": "company name or NOT SPECIFIED",
+    "siteName": "site location or NOT SPECIFIED",
+    "effectiveDate": "contract start date or NOT SPECIFIED",
+    "expirationDate": "contract end date or NOT SPECIFIED"
+  },
+  "confidence": {
+    "contractTerm": 0.0-1.0,
+    "baseRate": 0.0-1.0,
+    "escalationRate": 0.0-1.0,
+    "systemCapacity": 0.0-1.0,
+    "efficiencyWarranty": 0.0-1.0,
+    "availabilityGuarantee": 0.0-1.0,
+    "customerName": 0.0-1.0,
+    "siteName": 0.0-1.0,
+    "effectiveDate": 0.0-1.0,
+    "expirationDate": 0.0-1.0
+  },
+  "notes": "Any important observations or clarifications"
+}
+
+CRITICAL EXTRACTION RULES:
+1. **System Capacity**: Scan ENTIRE document for ANY number followed by "kW" or "MW"
+   - Look for: "Capacity (kW):", "54,600 kW", "2800kW", "2.8 MW"
+   - Check: Project Addendum lists, Performance Specs, Equipment tables
+
+2. **Efficiency Warranty**: Find ANY percentage near "efficiency", "LHV", or "HHV"
+   - Examples: "47%", "50%", "47.0%"
+
+3. **Base Rate**: Look for pricing in $/kWh format
+   - Examples: "$0.085/kWh", "8.5¢", "$85/MWh"
+
+4. **Contract Term**: Find duration in years
+   - Examples: "15 years", "fifteen years", "15-year"
+
+5. ONLY use "NOT SPECIFIED" if you've searched the ENTIRE document
+
+Return ONLY the JSON object, no other text.`;
+  }
+
+  /**
    * Extract site ID from filename (e.g., "BBM000.Z" from "BBM000.Z - System Order.pdf")
    */
   extractSiteIdFromFilename(filename) {

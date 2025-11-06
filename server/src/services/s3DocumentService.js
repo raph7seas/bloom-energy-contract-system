@@ -1,8 +1,9 @@
 /**
  * S3 Document Service
- * Handles document retrieval from S3 and coordination with Bedrock extraction
+ * Handles document retrieval from S3 and coordination with AI extraction services
  */
 import bedrockService from './bedrockService.js';
+import aiService from './aiService.js';
 
 class S3DocumentService {
   constructor() {
@@ -37,6 +38,7 @@ class S3DocumentService {
    * Process a document from S3
    * @param {string} s3Key - S3 object key
    * @param {Object} options - Processing options
+   * @param {string} options.aiProvider - AI provider to use ('bedrock' or 'anthropic')
    * @returns {Object} Processing result
    */
   async processDocumentFromS3(s3Key, options = {}) {
@@ -47,13 +49,13 @@ class S3DocumentService {
       const pdfBuffer = await this.downloadFromS3(s3Key);
       const filename = s3Key.split('/').pop();
 
-      // 2. Extract data using Bedrock
-      console.log(`🤖 Extracting data with Bedrock...`);
-      const extractionResult = await bedrockService.extractFromPDF(
-        pdfBuffer,
-        filename,
-        options
-      );
+      // 2. Extract data using selected AI provider (from options or env variable)
+      const provider = options.aiProvider || process.env.DEFAULT_AI_PROVIDER || 'bedrock';
+      console.log(`🤖 Extracting data with ${provider}...`);
+
+      const extractionResult = provider === 'bedrock'
+        ? await bedrockService.extractFromPDF(pdfBuffer, filename, options)
+        : await aiService.extractFromPDF(pdfBuffer, filename, options);
 
       // 3. Parse extracted JSON
       let extractedData;
