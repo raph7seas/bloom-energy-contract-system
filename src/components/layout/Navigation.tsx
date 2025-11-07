@@ -41,11 +41,11 @@ export const Navigation: React.FC<NavigationProps> = ({ activeView, onViewChange
     //   label: 'Compare Contracts',
     //   icon: Eye,
     // },
-    {
-      id: 'ai-assistant',
-      label: 'AI Assistant',
-      icon: Brain,
-    },
+    // {
+    //   id: 'ai-assistant',
+    //   label: 'AI Assistant',
+    //   icon: Brain,
+    // },
     {
       id: 'analytics',
       label: 'Analytics',
