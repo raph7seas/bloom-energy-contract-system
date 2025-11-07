@@ -2,8 +2,8 @@
 # Frontend deployment only - Backend requires separate hosting
 
 [build]
-  # Build command
-  command = "npm run build"
+  # Build command - install dependencies first, then build
+  command = "npm ci && npm run build"
 
   # Publish directory (Vite builds to dist/)
   publish = "dist"
