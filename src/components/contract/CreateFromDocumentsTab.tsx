@@ -30,7 +30,7 @@ export const CreateFromDocumentsTab: React.FC<CreateFromDocumentsTabProps> = ({
     return newId;
   });
   const [showHelp, setShowHelp] = useState(false);
-  const [aiProvider, setAiProvider] = useState<'bedrock' | 'anthropic'>('anthropic');
+  const [aiProvider, setAiProvider] = useState<'bedrock' | 'anthropic'>('bedrock');
 
   // Counter to trigger DocumentManager refresh without remounting
   const [uploadTrigger, setUploadTrigger] = useState(0);

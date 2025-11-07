@@ -142,6 +142,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<DocumentAnalysisSummary | null>(null);
   const [creatingContract, setCreatingContract] = useState(false);
+  const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
 
   const blueprint = analysisResults?.contractBlueprint || null;
   const topRules = useMemo(() => {
@@ -357,6 +358,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       if (validDocuments.length === 0) {
         setError('No documents with extracted text found');
         setAnalyzing(false);
+        setAnalysisJobId(null);  // Clear jobId on error
         return;
       }
 
@@ -365,6 +367,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
       // Generate job ID for progress tracking
       const jobId = `analysis-${Date.now()}`;
+      setAnalysisJobId(jobId);  // Store jobId in state for progress tracking
 
       // Track if API response already handled results
       let apiResponseHandled = false;
@@ -516,16 +519,19 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         }
 
         setAnalyzing(false);
+        setAnalysisJobId(null);  // Clear jobId when analysis completes
       } catch (error) {
         console.error('❌ AI Analysis error:', error);
         setError(error instanceof Error ? error.message : 'Analysis failed');
         setAnalyzing(false);
+        setAnalysisJobId(null);  // Clear jobId on error
       }
 
     } catch (err) {
       console.error('❌ Document analysis error:', err);
       setError(err instanceof Error ? err.message : 'Failed to analyze documents');
       setAnalyzing(false);
+      setAnalysisJobId(null);  // Clear jobId on error
     }
   };
 
@@ -539,6 +545,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     console.log('📦 Blueprint metadata:', blueprint?.metadata);
 
     setAnalyzing(false);
+    setAnalysisJobId(null);  // Clear jobId when processing completes
 
     // Debug: Log individual result structures
     results.forEach((r, idx) => {
@@ -612,6 +619,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
   const handleProcessingCancel = () => {
     setAnalyzing(false);
+    setAnalysisJobId(null);  // Clear jobId when processing is cancelled
   };
 
   const handleApplyBlueprint = () => {
@@ -993,6 +1001,15 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
               <p className="text-red-700">{error}</p>
             </div>
           </div>
+        )}
+
+        {/* Multi-Document Processing Progress - Compact */}
+        {analyzing && analysisJobId && (
+          <MultiDocumentProgress
+            jobId={analysisJobId}
+            onComplete={handleProcessingComplete}
+            onCancel={handleProcessingCancel}
+          />
         )}
 
         {/* Analysis Results - Compact */}
@@ -1513,6 +1530,32 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <p className="mt-1 text-sm text-red-700">{error}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Document Processing Progress */}
+      {analyzing && (
+        <div className="bg-white border border-blue-200 rounded-lg p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Analyzing Documents</h3>
+                <p className="text-sm text-gray-600">Processing {documents.length} documents with AI...</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-gray-700">Processing documents...</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              This may take a few minutes depending on document size and complexity.
+            </p>
           </div>
         </div>
       )}

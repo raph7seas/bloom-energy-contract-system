@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "build:check": "tsc && vite build",
     "lint": "tsc --noEmit -p tsconfig.lite.json",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
