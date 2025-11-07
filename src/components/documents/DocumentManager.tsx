@@ -128,7 +128,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   aiProvider = 'anthropic',
   onUploadComplete
 }) => {
-  const { token } = useAuth();
+  const { token, isDemoMode } = useAuth();
   const { startJob } = useProcessing();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +196,17 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     console.log('🔍 [DocumentManager] fetchDocuments() called for contractId:', contractId);
     try {
       setLoading(true);
+
+      // In demo mode, return empty documents list
+      if (isDemoMode) {
+        console.log('🎭 [DocumentManager] Demo mode - returning empty list');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        setDocuments([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       const url = `/api/uploads/contract/${contractId}`;
       console.log('📡 [DocumentManager] Fetching from:', url);
 
@@ -211,7 +222,16 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         throw new Error('Failed to fetch documents');
       }
 
-      const data = await response.json();
+      // Safe JSON parsing
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('❌ [DocumentManager] Failed to parse JSON:', text.substring(0, 100));
+        throw new Error('Invalid response from server');
+      }
+
       console.log('📦 [DocumentManager] Response data:', data);
 
       const uploads = Array.isArray(data.uploads) ? data.uploads : [];
@@ -227,6 +247,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     } catch (err) {
       console.error('❌ [DocumentManager] fetchDocuments error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch documents');
+      // In case of error, show empty list instead of error state in demo mode
+      if (isDemoMode) {
+        setDocuments([]);
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }

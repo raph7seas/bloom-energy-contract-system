@@ -27,7 +27,16 @@ class ContractService {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
+
+      // Safe JSON parsing
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', text.substring(0, 100));
+        throw new Error('Invalid response from server');
+      }
 
       // Transform backend format to frontend format
       // API returns either an array directly or {contracts: [...]}
