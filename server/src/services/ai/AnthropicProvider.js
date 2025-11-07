@@ -47,18 +47,39 @@ export class AnthropicProvider extends AIProvider {
     } = options;
 
     try {
+      // Build system prompt with contract context if available
+      const systemPrompt = this._buildChatSystemPrompt(context);
+
+      // Build messages with contract and document context
       const messages = [
         ...conversationHistory.map(msg => ({
           role: msg.role,
           content: msg.content
-        })),
-        { role: 'user', content: message }
+        }))
       ];
+
+      // If we have contract and document context, add it before the user's message
+      if (context.contract && context.documents) {
+        const contextMessage = this._buildContractContextMessage(context);
+        messages.push({
+          role: 'user',
+          content: contextMessage
+        });
+
+        // Add assistant acknowledgment
+        messages.push({
+          role: 'assistant',
+          content: 'I have reviewed the contract information and documents. I\'m ready to answer your questions about this contract.'
+        });
+      }
+
+      // Add the actual user message
+      messages.push({ role: 'user', content: message });
 
       const response = await this.anthropic.messages.create({
         model,
         max_tokens: maxTokens,
-        system: this._buildSystemPrompt('chat'),
+        system: systemPrompt,
         messages
       });
 
@@ -82,6 +103,107 @@ export class AnthropicProvider extends AIProvider {
       console.error('Anthropic chat error:', error);
       return this._generateMockResponse(message, 'chat');
     }
+  }
+
+  _buildChatSystemPrompt(context) {
+    const basePrompt = this._buildSystemPrompt('chat');
+
+    if (context.contract && context.documents) {
+      return `${basePrompt}
+
+You are now assisting with a specific contract. The user will ask questions about this contract and its associated documents.
+
+Important instructions:
+- Answer questions based ONLY on the information provided in the contract data and documents
+- If you cannot find the answer in the provided information, clearly state that
+- Be specific and cite which document or field contains the information when possible
+- For questions about serial numbers, part numbers, financiers, terms, pricing, etc., search through all provided documents
+- Provide clear, concise answers
+- If a question is ambiguous, ask for clarification`;
+    }
+
+    return basePrompt;
+  }
+
+  _buildContractContextMessage(context) {
+    const { contract, documents } = context;
+
+    let contextMessage = `I need your help answering questions about the following contract:
+
+CONTRACT INFORMATION:
+- Contract ID: ${contract.id}
+- Name: ${contract.name}
+- Client: ${contract.client}
+- Site: ${contract.site}
+- Capacity: ${contract.capacity} kW
+- Term: ${contract.term} years
+- Type: ${contract.type}
+- Status: ${contract.status}
+- Total Value: $${contract.totalValue?.toLocaleString() || 'N/A'}
+- Effective Date: ${contract.effectiveDate}
+
+`;
+
+    if (contract.parameters) {
+      contextMessage += `CONTRACT PARAMETERS:
+`;
+
+      // Financial parameters
+      if (contract.parameters.financial) {
+        contextMessage += `Financial:
+- Base Rate: $${contract.parameters.financial.baseRate}/kWh
+- Escalation: ${contract.parameters.financial.escalation}%
+- Invoice Frequency: ${contract.parameters.financial.invoiceFrequency || 'N/A'}
+- Payment Terms: ${contract.parameters.financial.paymentTerms || 'N/A'}
+`;
+      }
+
+      // Technical parameters
+      if (contract.parameters.technical) {
+        contextMessage += `Technical:
+- Voltage: ${contract.parameters.technical.voltage || 'N/A'}
+- Servers: ${contract.parameters.technical.servers || 'N/A'}
+- Components: ${contract.parameters.technical.components?.join(', ') || 'N/A'}
+`;
+      }
+
+      // Operating parameters
+      if (contract.parameters.operating) {
+        contextMessage += `Operating:
+- Output Warranty: ${contract.parameters.operating.outputWarranty || 'N/A'}%
+- Efficiency: ${contract.parameters.operating.efficiency || 'N/A'}%
+`;
+      }
+    }
+
+    // Add document information
+    if (documents && documents.length > 0) {
+      contextMessage += `
+ASSOCIATED DOCUMENTS (${documents.length} total):
+
+`;
+
+      documents.forEach((doc, index) => {
+        contextMessage += `Document ${index + 1}:
+- Title: ${doc.title}
+- File: ${doc.fileName}
+- Type: ${doc.documentType}
+- Pages: ${doc.pageCount || 'Unknown'}
+
+`;
+
+        if (doc.content) {
+          // Truncate content if too long but include key portions
+          const truncatedContent = doc.content.length > 5000
+            ? doc.content.substring(0, 5000) + '... [content truncated]'
+            : doc.content;
+
+          contextMessage += `Content:\n${truncatedContent}\n\n`;
+        }
+      });
+    }
+
+    return contextMessage;
   }
 
   async optimize(contractData, options = {}) {
