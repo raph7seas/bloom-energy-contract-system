@@ -15,6 +15,7 @@ import {
   Eye,
   Loader2
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DashboardData {
   stats: {
@@ -50,15 +51,87 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+  const { isDemoMode } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
+  const getMockDashboardData = (): DashboardData => ({
+    stats: {
+      totalContracts: 12,
+      contractValue: 4850000,
+      rulesExtracted: 68,
+      timeSaved: 156
+    },
+    charts: {
+      contractTrend: [
+        { month: 'Jan', contracts: 2, value: 800000 },
+        { month: 'Feb', contracts: 1, value: 425000 },
+        { month: 'Mar', contracts: 3, value: 1150000 },
+        { month: 'Apr', contracts: 2, value: 975000 },
+        { month: 'May', contracts: 4, value: 1500000 }
+      ],
+      rulesExtraction: [
+        { type: 'Financial', count: 24, accuracy: 96 },
+        { type: 'Technical', count: 18, accuracy: 94 },
+        { type: 'Operating', count: 15, accuracy: 92 },
+        { type: 'Compliance', count: 11, accuracy: 98 }
+      ],
+      contractTypes: [
+        { type: 'PP', count: 5, value: 2100000 },
+        { type: 'MG', count: 4, value: 1600000 },
+        { type: 'AMG', count: 2, value: 850000 },
+        { type: 'OG', count: 1, value: 300000 }
+      ]
+    },
+    recentActivity: [
+      {
+        id: '1',
+        type: 'contract_created',
+        description: 'New contract created for Tesla Gigafactory',
+        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        user: 'Demo User'
+      },
+      {
+        id: '2',
+        type: 'rules_extracted',
+        description: '12 business rules extracted from PG&E contract',
+        timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        user: 'Demo User'
+      },
+      {
+        id: '3',
+        type: 'document_uploaded',
+        description: 'Contract document uploaded: SCE-2024-MG-001.pdf',
+        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        user: 'Demo User'
+      }
+    ],
+    systemStatus: {
+      overall: 'demo',
+      services: [
+        { name: 'Frontend', status: 'healthy', lastCheck: new Date().toISOString() },
+        { name: 'Backend API', status: 'offline', lastCheck: new Date().toISOString() },
+        { name: 'AI Services', status: 'offline', lastCheck: new Date().toISOString() }
+      ]
+    }
+  });
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
+
+      // In demo mode, use mock data instead of API calls
+      if (isDemoMode) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate loading
+        const mockData = getMockDashboardData();
+        setDashboardData(mockData);
+        setLastUpdated(new Date().toLocaleString());
+        setLoading(false);
+        return;
+      }
 
       // Fetch data from multiple endpoints - handle failures gracefully
       const [contractsRes, aiAnalyticsRes, aiHealthRes] = await Promise.allSettled([
@@ -67,17 +140,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         fetch('/api/ai/health').catch(e => ({ ok: false, error: e.message }))
       ]);
 
-      // Extract results with fallbacks
+      // Extract results with fallbacks - handle JSON parsing errors
+      const parseJsonSafely = async (response: any) => {
+        try {
+          const text = await response.text();
+          return JSON.parse(text);
+        } catch (e) {
+          console.warn('Failed to parse JSON response:', e);
+          return null;
+        }
+      };
+
       const contracts = contractsRes.status === 'fulfilled' && contractsRes.value.ok
-        ? await contractsRes.value.json()
+        ? await parseJsonSafely(contractsRes.value) || { contracts: [], pagination: { total: 0 } }
         : { contracts: [], pagination: { total: 0 } };
 
       const aiAnalytics = aiAnalyticsRes.status === 'fulfilled' && aiAnalyticsRes.value.ok
-        ? await aiAnalyticsRes.value.json()
+        ? await parseJsonSafely(aiAnalyticsRes.value) || {}
         : {};
 
       const aiHealth = aiHealthRes.status === 'fulfilled' && aiHealthRes.value.ok
-        ? await aiHealthRes.value.json()
+        ? await parseJsonSafely(aiHealthRes.value) || { status: 'unknown' }
         : { status: 'unknown' };
       
       // Process and aggregate data

@@ -157,6 +157,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     checkAuthStatus,
+    isDemoMode: user?.id === 'demo-user',
   };
 
   return (
