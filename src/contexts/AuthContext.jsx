@@ -41,6 +41,74 @@ export const AuthProvider = ({ children }) => {
           lastName: 'User',
           role: 'USER'
         };
+
+        // Ensure mock contracts are seeded (in case of page reload)
+        if (!localStorage.getItem('bloom_contracts')) {
+          const mockContracts = [
+            {
+              id: 'demo-contract-1',
+              name: 'Tesla Gigafactory - Power Purchase Agreement',
+              client: 'Tesla Inc.',
+              site: 'Gigafactory Texas, Austin',
+              type: 'PP',
+              capacity: 975,
+              term: 15,
+              status: 'Active',
+              uploadDate: '2024-01-15',
+              effectiveDate: '2024-02-01',
+              totalValue: 2850000,
+              parameters: {
+                financial: { baseRate: 0.12, escalation: 3.5, microgridAdder: 0, thermalCycleFee: 0, electricalBudget: 25000, commissioningAllowance: 15000 },
+                technical: { voltage: '480V', servers: 3, components: ['RI', 'AC'], recType: 'CT-Class-I' },
+                operating: { outputWarranty: 97, efficiency: 55, demandRange: { min: 195, max: 975 }, criticalOutput: 0 }
+              },
+              aiMetadata: { isAiExtracted: true, sourceDocument: { id: 'doc-1', name: 'Tesla_PPA_2024.pdf' }, overallConfidence: 95 },
+              notes: 'High-capacity power purchase agreement with favorable terms'
+            },
+            {
+              id: 'demo-contract-2',
+              name: 'PG&E Microgrid Project',
+              client: 'Pacific Gas & Electric',
+              site: 'San Francisco Data Center',
+              type: 'MG',
+              capacity: 650,
+              term: 10,
+              status: 'Active',
+              uploadDate: '2024-02-10',
+              effectiveDate: '2024-03-01',
+              totalValue: 1950000,
+              parameters: {
+                financial: { baseRate: 0.15, escalation: 2.5, microgridAdder: 0.02, thermalCycleFee: 500, electricalBudget: 18000, commissioningAllowance: 12000 },
+                technical: { voltage: '4.16kV', servers: 2, components: ['RI', 'AC', 'UC'], recType: null },
+                operating: { outputWarranty: 95, efficiency: 52, demandRange: { min: 130, max: 650 }, criticalOutput: 325 }
+              },
+              aiMetadata: { isAiExtracted: false },
+              notes: 'Microgrid with island mode capabilities'
+            },
+            {
+              id: 'demo-contract-3',
+              name: 'Google Cloud - Onsite Generation',
+              client: 'Google LLC',
+              site: 'Mountain View Campus',
+              type: 'OG',
+              capacity: 1300,
+              term: 20,
+              status: 'Active',
+              uploadDate: '2024-03-05',
+              effectiveDate: '2024-04-01',
+              totalValue: 4200000,
+              parameters: {
+                financial: { baseRate: 0.11, escalation: 3.0, microgridAdder: 0, thermalCycleFee: 0, electricalBudget: 35000, commissioningAllowance: 22000 },
+                technical: { voltage: '13.2kV', servers: 4, components: ['RI', 'AC', 'UC', 'BESS'], recType: 'CA-Class-II' },
+                operating: { outputWarranty: 98, efficiency: 58, demandRange: { min: 260, max: 1300 }, criticalOutput: 0 }
+              },
+              aiMetadata: { isAiExtracted: true, sourceDocument: { id: 'doc-3', name: 'Google_OG_Contract.pdf' }, overallConfidence: 92 },
+              notes: 'Long-term onsite generation with battery storage'
+            }
+          ];
+          localStorage.setItem('bloom_contracts', JSON.stringify(mockContracts));
+        }
+
         setUser(demoUser);
         setIsAuthenticated(true);
         setLoading(false);

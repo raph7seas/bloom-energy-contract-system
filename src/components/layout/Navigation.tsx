@@ -36,11 +36,11 @@ export const Navigation: React.FC<NavigationProps> = ({ activeView, onViewChange
       label: 'Contract Library',
       icon: Library,
     },
-    {
-      id: 'compare',
-      label: 'Compare Contracts',
-      icon: Eye,
-    },
+    // {
+    //   id: 'compare',
+    //   label: 'Compare Contracts',
+    //   icon: Eye,
+    // },
     {
       id: 'ai-assistant',
       label: 'AI Assistant',
@@ -56,11 +56,11 @@ export const Navigation: React.FC<NavigationProps> = ({ activeView, onViewChange
       label: 'Document Upload',
       icon: FileText,
     },
-    {
-      id: 'templates',
-      label: 'Templates',
-      icon: Building,
-    },
+    // {
+    //   id: 'templates',
+    //   label: 'Templates',
+    //   icon: Building,
+    // },
     {
       id: 'rules',
       label: 'Rules Engine',
