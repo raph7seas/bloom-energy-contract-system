@@ -32,6 +32,21 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      // Demo mode - allow demo token
+      if (token === 'demo-token') {
+        const demoUser = {
+          id: 'demo-user',
+          email: 'demo@bloom.com',
+          firstName: 'Demo',
+          lastName: 'User',
+          role: 'USER'
+        };
+        setUser(demoUser);
+        setIsAuthenticated(true);
+        setLoading(false);
+        return;
+      }
+
       // Check if token is valid by calling /api/auth/me
       const response = await fetch(`${API_BASE}/auth/me`, {
         headers: {
@@ -64,6 +79,22 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null); // Clear any previous errors
+
+      // Demo mode - allow login without backend
+      if (username === 'demo@bloom.com' && password === 'demo123') {
+        const demoUser = {
+          id: 'demo-user',
+          email: 'demo@bloom.com',
+          firstName: 'Demo',
+          lastName: 'User',
+          role: 'USER'
+        };
+        localStorage.setItem('authToken', 'demo-token');
+        setUser(demoUser);
+        setIsAuthenticated(true);
+        setLoading(false);
+        return { success: true, user: demoUser };
+      }
 
       const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
